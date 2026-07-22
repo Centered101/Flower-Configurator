@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import type { ReactNode } from "react";
 import { CalendarCheck, Heart, Loader2, LogOut, Mail, MapPin, MessageCircle, PackageCheck, Phone, Save, Search, Trash2, UserRound } from "lucide-react";
@@ -77,7 +77,7 @@ function saveDataDeletionRecord(request: DataDeletionRequest) {
 
 export default function CustomerProfilePage() {
   const router = useRouter();
-  const supabase = useMemo(() => createSupabaseBrowserClient(), []);
+  const [supabase, setSupabase] = useState<ReturnType<typeof createSupabaseBrowserClient> | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
@@ -94,8 +94,21 @@ export default function CustomerProfilePage() {
 
   useEffect(() => {
     let isMounted = true;
+    let client: ReturnType<typeof createSupabaseBrowserClient>;
 
-    supabase.auth.getUser().then(({ data }) => {
+    try {
+      client = createSupabaseBrowserClient();
+      setSupabase(client);
+    } catch {
+      toast.error("ยังไม่ได้ตั้งค่า Supabase สำหรับระบบลูกค้า");
+      setIsLoading(false);
+      router.replace("/login?redirect=/profile");
+      return () => {
+        isMounted = false;
+      };
+    }
+
+    client.auth.getUser().then(({ data }) => {
       if (!isMounted) return;
 
       if (!data.user) {
@@ -120,7 +133,7 @@ export default function CustomerProfilePage() {
     return () => {
       isMounted = false;
     };
-  }, [router, supabase]);
+  }, [router]);
 
   useEffect(() => {
     if (!user) return;
@@ -156,7 +169,7 @@ export default function CustomerProfilePage() {
 
   async function handleSaveProfile(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!user || isSaving) return;
+    if (!user || !supabase || isSaving) return;
 
     setIsSaving(true);
     const nextDisplayName = [firstName.trim(), lastName.trim()].filter(Boolean).join(" ");
@@ -185,6 +198,8 @@ export default function CustomerProfilePage() {
   }
 
   async function signOutCustomerSession() {
+    if (!supabase) return new Error("ยังไม่ได้ตั้งค่า Supabase สำหรับระบบลูกค้า");
+
     try {
       const { error } = await supabase.auth.signOut();
       if (!error) return null;
