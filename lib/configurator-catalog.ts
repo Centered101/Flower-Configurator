@@ -1,5 +1,22 @@
 import type { CatalogOption, FlowerColor, FlowerType, ProductType, StemOption } from "@/lib/types";
 
+export type ConfiguratorMaterial = {
+  id: string;
+  name: string;
+  color: string;
+  stock: number;
+  unit: string;
+  alertAt: number;
+};
+
+export type ConfiguratorMaterialLink = {
+  id?: string;
+  optionType: "product_type" | "flower_type" | "color" | "stem" | "wrapping" | "ribbon" | "decoration";
+  optionId: string;
+  materialId: string;
+  quantityPerUnit: number;
+};
+
 export type EditableProductType = Omit<ProductType, "id"> & { id: string };
 export type EditableFlowerType = Omit<FlowerType, "id"> & { id: string };
 export type EditableFlowerColor = Omit<FlowerColor, "id"> & { id: string };
@@ -21,6 +38,8 @@ export type ConfiguratorCatalog = {
   wrappingOptions: Record<string, EditableWrappingOption>;
   ribbonOptions: Record<string, EditableRibbonOption>;
   decorationOptions: Record<string, EditableDecorationOption>;
+  materials: ConfiguratorMaterial[];
+  materialLinks: ConfiguratorMaterialLink[];
   reviewNote: string;
 };
 
@@ -40,6 +59,8 @@ export function getDefaultConfiguratorCatalog(): ConfiguratorCatalog {
     wrappingOptions: {},
     ribbonOptions: {},
     decorationOptions: {},
+    materials: [],
+    materialLinks: [],
     reviewNote: "ราคานี้เป็นราคาประมาณการ ร้านจะตรวจสอบและยืนยันอีกครั้งก่อนเริ่มผลิต"
   };
 }

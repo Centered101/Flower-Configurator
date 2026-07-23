@@ -40,7 +40,7 @@ export function HeroSection() {
         </div>
       </div>
       <div className="rounded-bloom border border-pink-100 bg-white p-4 shadow-soft" data-aos="zoom-in">
-        <ProductPreview compact />
+        <ProductPreview compact sampleMode="random" />
       </div>
     </section>
   );

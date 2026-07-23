@@ -17,7 +17,21 @@ export type AdminMaterial = {
   unit: string;
   alertAt: number;
   cost: number;
+  supplier?: string;
+  status?: string;
 };
+
+export type DesignOptionMaterialLink = {
+  id?: string;
+  optionType: "product_type" | "flower_type" | "color" | "stem" | "wrapping" | "ribbon" | "decoration";
+  optionId: string;
+  materialId: string;
+  quantityPerUnit: number;
+};
+
+export class OptionalSchemaMissingError extends Error {
+  code = "OPTIONAL_SCHEMA_MISSING" as const;
+}
 
 export type AdminGalleryItem = {
   id: string;
@@ -82,6 +96,61 @@ export async function deleteAdminProduct(id: string) {
   });
 
   return readResponse<{ ok: true }>(response, "ลบสินค้าไม่สำเร็จ");
+}
+
+export async function fetchAdminMaterials() {
+  const response = await fetch("/api/admin/materials", { cache: "no-store" });
+  return readResponse<AdminMaterial[]>(response, "โหลดวัสดุไม่สำเร็จ");
+}
+
+export async function persistAdminMaterial(material: AdminMaterial) {
+  const response = await fetch("/api/admin/materials", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(material)
+  });
+
+  return readResponse<AdminMaterial>(response, "บันทึกวัสดุไม่สำเร็จ");
+}
+
+export async function deleteAdminMaterial(id: string) {
+  const response = await fetch(`/api/admin/materials?id=${encodeURIComponent(id)}`, {
+    method: "DELETE"
+  });
+
+  return readResponse<{ ok: true }>(response, "ลบวัสดุไม่สำเร็จ");
+}
+
+export async function fetchOptionMaterialLinks() {
+  const result = await fetchOptionMaterialLinksState();
+  return result.links;
+}
+
+export async function fetchOptionMaterialLinksState() {
+  const response = await fetch("/api/admin/option-materials", { cache: "no-store" });
+  const links = await readResponse<DesignOptionMaterialLink[]>(response, "โหลดการผูกวัสดุไม่สำเร็จ");
+  return {
+    links,
+    schemaReady: response.headers.get("x-schema-ready") !== "false"
+  };
+}
+
+export async function persistOptionMaterialLinks(links: DesignOptionMaterialLink[]) {
+  const response = await fetch("/api/admin/option-materials", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(links)
+  });
+
+  try {
+    return await readResponse<DesignOptionMaterialLink[]>(response, "บันทึกการผูกวัสดุไม่สำเร็จ");
+  } catch (error) {
+    if (error instanceof Error && error.message.includes("design_option_materials")) {
+      throw new OptionalSchemaMissingError(error.message);
+    }
+
+    throw error;
+  }
 }
 
 export async function fetchPublicGalleryItems() {

@@ -2,6 +2,8 @@
 
 import type { FlowerTypeId } from "@/lib/types";
 
+export type StemShapeStyle = "straight" | "curved" | "spiral" | "double" | "ribbon";
+
 type FlowerSvgProps = {
   color: string;
   stemColor: string;
@@ -12,28 +14,85 @@ type FlowerSvgProps = {
   type: FlowerTypeId | "";
   baseX: number;
   baseY: number;
+  stemWidth?: number;
+  stemStyle?: StemShapeStyle;
+  stemCurveOffset?: number;
+  stemLengthScale?: number;
 };
 
-function Stem({ color, baseDx, baseDy }: { color: string; baseDx: number; baseDy: number }) {
+function stemPath(baseDx: number, baseDy: number, curveOffset: number) {
+  return `M0 38 C${baseDx * 0.12 + curveOffset} ${baseDy * 0.38}, ${baseDx * 0.72 + curveOffset * 0.35} ${baseDy * 0.72}, ${baseDx} ${baseDy}`;
+}
+
+function Stem({
+  color,
+  baseDx,
+  baseDy,
+  width,
+  style,
+  curveOffset,
+  lengthScale
+}: {
+  color: string;
+  baseDx: number;
+  baseDy: number;
+  width: number;
+  style: StemShapeStyle;
+  curveOffset: number;
+  lengthScale: number;
+}) {
+  const pathD = stemPath(baseDx, baseDy, curveOffset);
+  const shadowWidth = width + 2.4;
+  const leafScale = Math.max(0.74, Math.min(0.96, lengthScale * 0.86));
+  const leafOneY = 38 + 86 * lengthScale;
+  const leafTwoY = 38 + 116 * lengthScale;
+  const doubleOffset = Math.max(3, width * 0.72);
+
   return (
     <g>
       <path
-        d={`M0 38 C${baseDx * 0.12} ${baseDy * 0.38}, ${baseDx * 0.72} ${baseDy * 0.72}, ${baseDx} ${baseDy}`}
+        d={pathD}
         fill="none"
         stroke="#1B5E20"
-        strokeWidth="7"
+        strokeWidth={shadowWidth}
         strokeLinecap="round"
         opacity="0.18"
       />
-      <path
-        d={`M0 38 C${baseDx * 0.12} ${baseDy * 0.38}, ${baseDx * 0.72} ${baseDy * 0.72}, ${baseDx} ${baseDy}`}
-        fill="none"
-        stroke={color}
-        strokeWidth="4.6"
-        strokeLinecap="round"
-      />
-      <path d="M-2 132 C-30 120 -40 105 -43 88 C-21 91 -7 106 -2 132Z" fill={color} opacity="0.58" stroke="#1B5E20" strokeWidth="1.4" />
-      <path d="M1 164 C30 150 41 135 45 116 C23 120 8 140 1 164Z" fill={color} opacity="0.52" stroke="#1B5E20" strokeWidth="1.4" />
+      {style === "ribbon" ? (
+        <path d={pathD} fill="none" stroke="#F48BB0" strokeWidth={width + 4.5} strokeLinecap="round" opacity="0.42" />
+      ) : null}
+      {style === "double" ? (
+        <>
+          <path d={pathD} fill="none" stroke={color} strokeWidth={width * 0.72} strokeLinecap="round" transform={`translate(${-doubleOffset} 0)`} />
+          <path d={pathD} fill="none" stroke={color} strokeWidth={width * 0.72} strokeLinecap="round" transform={`translate(${doubleOffset} 0)`} />
+        </>
+      ) : (
+        <path d={pathD} fill="none" stroke={color} strokeWidth={width} strokeLinecap="round" />
+      )}
+      {style === "spiral" ? (
+        <path
+          d={pathD}
+          fill="none"
+          stroke="rgba(255,255,255,0.5)"
+          strokeWidth={Math.max(1.2, width * 0.3)}
+          strokeLinecap="round"
+          transform="translate(-2.4 0)"
+          opacity={0.72}
+        />
+      ) : null}
+      {style === "ribbon" ? (
+        <path
+          d={pathD}
+          fill="none"
+          stroke="rgba(255,255,255,0.36)"
+          strokeWidth={Math.max(1.2, width * 0.24)}
+          strokeLinecap="round"
+          transform="translate(-2 0)"
+          opacity={0.75}
+        />
+      ) : null}
+      <path d="M0 0 C-20 -10 -36 -28 -45 -54 C-19 -49 -4 -25 0 0Z" fill={color} opacity="0.58" stroke="#1B5E20" strokeWidth="1.35" transform={`translate(-1 ${leafOneY}) rotate(-8) scale(${leafScale})`} />
+      <path d="M0 0 C20 -12 36 -31 46 -58 C20 -52 5 -25 0 0Z" fill={color} opacity="0.52" stroke="#1B5E20" strokeWidth="1.35" transform={`translate(1 ${leafTwoY}) rotate(8) scale(${leafScale})`} />
     </g>
   );
 }
@@ -176,13 +235,27 @@ function FlowerHead({ type, color }: { type: FlowerTypeId | ""; color: string })
   }
 }
 
-export function FlowerSvgShape({ color, stemColor, x, y, scale, rotate, type, baseX, baseY }: FlowerSvgProps) {
+export function FlowerSvgShape({
+  color,
+  stemColor,
+  x,
+  y,
+  scale,
+  rotate,
+  type,
+  baseX,
+  baseY,
+  stemWidth = 4.6,
+  stemStyle = "straight",
+  stemCurveOffset = 0,
+  stemLengthScale = 1
+}: FlowerSvgProps) {
   const baseDx = (baseX - x) / scale;
   const baseDy = (baseY - y) / scale;
 
   return (
     <g transform={`translate(${x} ${y}) rotate(${rotate}) scale(${scale})`}>
-      <Stem color={stemColor} baseDx={baseDx} baseDy={baseDy} />
+      <Stem color={stemColor} baseDx={baseDx} baseDy={baseDy} width={stemWidth} style={stemStyle} curveOffset={stemCurveOffset} lengthScale={stemLengthScale} />
       <g transform="translate(0 28)">
         <FlowerHead type={type} color={color} />
       </g>

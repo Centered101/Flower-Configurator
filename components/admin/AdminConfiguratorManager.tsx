@@ -1,9 +1,17 @@
 "use client";
 
 import { useEffect, useRef, useState, type PointerEvent } from "react";
-import { Pipette, RotateCcw, Save } from "lucide-react";
+import { ArrowDown, ArrowUp, Pipette, RotateCcw, Save } from "lucide-react";
 import { toast } from "sonner";
 import { HelpTooltip } from "@/components/HelpTooltip";
+import {
+  fetchAdminMaterials,
+  fetchOptionMaterialLinksState,
+  OptionalSchemaMissingError,
+  persistOptionMaterialLinks,
+  type AdminMaterial,
+  type DesignOptionMaterialLink
+} from "@/lib/admin-data";
 import {
   getDefaultConfiguratorCatalog,
   fetchConfiguratorCatalog,
@@ -54,6 +62,9 @@ function makeId(prefix: string) {
 export function AdminConfiguratorManager() {
   const [activeTab, setActiveTab] = useState<TabId>("products");
   const [catalog, setCatalog] = useState<ConfiguratorCatalog>(() => getDefaultConfiguratorCatalog());
+  const [materials, setMaterials] = useState<AdminMaterial[]>([]);
+  const [materialLinks, setMaterialLinks] = useState<DesignOptionMaterialLink[]>([]);
+  const [isMaterialLinkSchemaReady, setIsMaterialLinkSchemaReady] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
@@ -69,6 +80,19 @@ export function AdminConfiguratorManager() {
         toast.warning("ฐานข้อมูลตัวเลือกออกแบบยังว่าง ใช้ข้อมูลในเครื่องชั่วคราว");
       })
       .catch(() => toast.warning("ยังเชื่อมฐานข้อมูลไม่ได้ ใช้ข้อมูลในเครื่องชั่วคราว"));
+
+    fetchAdminMaterials()
+      .then(setMaterials)
+      .catch(() => toast.warning("ยังโหลดสต็อกวัสดุไม่ได้"));
+    fetchOptionMaterialLinksState()
+      .then(({ links, schemaReady }) => {
+        setMaterialLinks(links);
+        setIsMaterialLinkSchemaReady(schemaReady);
+        if (!schemaReady) {
+          toast.warning("ยังไม่ได้เปิดใช้ตารางผูกวัสดุ กรุณารัน supabase/schema.sql ก่อน");
+        }
+      })
+      .catch(() => undefined);
   }, []);
 
   function updateList<T extends ListKey>(key: T, index: number, patch: Partial<ConfiguratorCatalog[T][number]>) {
@@ -144,6 +168,18 @@ export function AdminConfiguratorManager() {
     toast.success("ลบรายการแล้ว");
   }
 
+  function moveListItem(key: ListKey, index: number, direction: -1 | 1) {
+    setCatalog((current) => {
+      const targetIndex = index + direction;
+      if (targetIndex < 0 || targetIndex >= current[key].length) return current;
+
+      const next = structuredClone(current) as ConfiguratorCatalog;
+      const items = next[key];
+      [items[index], items[targetIndex]] = [items[targetIndex], items[index]];
+      return next;
+    });
+  }
+
   function updateRecord<T extends keyof Pick<ConfiguratorCatalog, "wrappingOptions" | "ribbonOptions" | "decorationOptions">>(
     key: T,
     id: keyof ConfiguratorCatalog[T],
@@ -209,15 +245,62 @@ export function AdminConfiguratorManager() {
     toast.success("ลบตัวเลือกก้านแล้ว");
   }
 
+  function updateMaterialLinks(optionType: DesignOptionMaterialLink["optionType"], optionId: string, links: DesignOptionMaterialLink[]) {
+    setMaterialLinks((current) => [
+      ...current.filter((link) => link.optionType !== optionType || link.optionId !== optionId),
+      ...links
+    ]);
+  }
+
+  function getMaterialLinks(optionType: DesignOptionMaterialLink["optionType"], optionId: string) {
+    return materialLinks.filter((link) => link.optionType === optionType && link.optionId === optionId);
+  }
+
+  function getLiveOptionIds() {
+    return new Set([
+      ...catalog.productTypes.map((item) => `product_type:${item.id}`),
+      ...catalog.flowerTypes.map((item) => `flower_type:${item.id}`),
+      ...catalog.colors.map((item) => `color:${item.id}`),
+      ...Object.keys(catalog.stems.strengths).map((id) => `stem:${id}`),
+      ...Object.keys(catalog.stems.styles).map((id) => `stem:${id}`),
+      ...Object.keys(catalog.stems.lengths).map((id) => `stem:${id}`),
+      ...Object.keys(catalog.stems.colors).map((id) => `stem:${id}`),
+      ...Object.keys(catalog.wrappingOptions).map((id) => `wrapping:${id}`),
+      ...Object.keys(catalog.ribbonOptions).map((id) => `ribbon:${id}`),
+      ...Object.keys(catalog.decorationOptions).map((id) => `decoration:${id}`)
+    ]);
+  }
+
   async function save() {
     setIsSaving(true);
     saveAdminConfiguratorCatalog(catalog);
 
     try {
       const savedCatalog = await persistConfiguratorCatalog(catalog);
+      const liveOptionIds = getLiveOptionIds();
+      const nextLinks = materialLinks.filter((link) => liveOptionIds.has(`${link.optionType}:${link.optionId}`));
+      let savedLinks = nextLinks;
+      let savedMaterialLinks = false;
+
+      if (isMaterialLinkSchemaReady) {
+        try {
+          savedLinks = await persistOptionMaterialLinks(nextLinks);
+          savedMaterialLinks = true;
+        } catch (error) {
+          if (!(error instanceof OptionalSchemaMissingError)) throw error;
+
+          setIsMaterialLinkSchemaReady(false);
+        }
+      }
+
       setCatalog(savedCatalog);
+      setMaterialLinks(savedLinks);
       saveAdminConfiguratorCatalog(savedCatalog);
-      toast.success("บันทึกลงฐานข้อมูลแล้ว");
+      toast.success(savedMaterialLinks ? "บันทึกตัวเลือกและวัสดุที่ใช้แล้ว" : "บันทึกตัวเลือกแล้ว");
+
+      if (!savedMaterialLinks && nextLinks.length) {
+        toast.warning("ยังบันทึกการผูกวัสดุไม่ได้ ต้องรัน supabase/schema.sql เพื่อสร้างตาราง design_option_materials ก่อน");
+      }
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "บันทึกลงฐานข้อมูลไม่สำเร็จ แต่เก็บไว้ในเครื่องแล้ว");
     } finally {
@@ -257,13 +340,33 @@ export function AdminConfiguratorManager() {
               เพิ่มประเภทสินค้า
             </button>
             {catalog.productTypes.map((item, index) => (
-              <div key={item.id} className="admin-option-card grid gap-3 p-3 xl:grid-cols-[minmax(160px,1fr)_minmax(220px,1.2fr)_110px_120px_100px_96px] xl:items-end">
-                <Field label="ชื่อ" value={item.name} onChange={(value) => updateList("productTypes", index, { name: value })} />
-                <Field label="รายละเอียด" value={item.description} onChange={(value) => updateList("productTypes", index, { description: value })} />
-                <Field label="ราคา" help="ราคาเพิ่มของประเภทนี้ในหน้าออกแบบ" type="number" value={item.price} onChange={(value) => updateList("productTypes", index, { price: toNumber(value) })} />
-                <Field label="จำนวนดอก/ก้าน" help="จำนวนดอกหรือก้านเริ่มต้นเมื่อเลือกประเภทนี้" type="number" value={item.baseQuantity} onChange={(value) => updateList("productTypes", index, { baseQuantity: toNumber(value) })} />
-                <Field label="วันผลิต" help="จำนวนวันผลิตโดยประมาณที่แสดงให้ลูกค้าเห็น" type="number" value={item.productionDays} onChange={(value) => updateList("productTypes", index, { productionDays: toNumber(value) })} />
-                <DeleteButton onClick={() => removeListItem("productTypes", item.id)} />
+              <div key={item.id} className="admin-option-card space-y-3 p-3">
+                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-pink-100 pb-3">
+                  <div>
+                    <p className="text-sm font-bold text-ink">ลำดับที่ {index + 1}</p>
+                    <p className="text-xs font-semibold text-zinc-500">ใช้เรียงการแสดงผลในหน้าออกแบบ</p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <MoveButton label="ขึ้น" icon="up" disabled={index === 0} onClick={() => moveListItem("productTypes", index, -1)} />
+                    <MoveButton label="ลง" icon="down" disabled={index === catalog.productTypes.length - 1} onClick={() => moveListItem("productTypes", index, 1)} />
+                    <DeleteButton fullWidth={false} onClick={() => removeListItem("productTypes", item.id)} />
+                  </div>
+                </div>
+                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[minmax(160px,1fr)_minmax(220px,1.2fr)_110px_120px_100px] xl:items-end">
+                  <Field label="ชื่อ" value={item.name} onChange={(value) => updateList("productTypes", index, { name: value })} />
+                  <Field label="รายละเอียด" value={item.description} onChange={(value) => updateList("productTypes", index, { description: value })} />
+                  <Field label="ราคา" help="ราคาเพิ่มของประเภทนี้ในหน้าออกแบบ" type="number" value={item.price} onChange={(value) => updateList("productTypes", index, { price: toNumber(value) })} />
+                  <Field label="จำนวนดอก/ก้าน" help="จำนวนดอกหรือก้านเริ่มต้นเมื่อเลือกประเภทนี้" type="number" value={item.baseQuantity} onChange={(value) => updateList("productTypes", index, { baseQuantity: toNumber(value) })} />
+                  <Field label="วันผลิต" help="จำนวนวันผลิตโดยประมาณที่แสดงให้ลูกค้าเห็น" type="number" value={item.productionDays} onChange={(value) => updateList("productTypes", index, { productionDays: toNumber(value) })} />
+                </div>
+                <MaterialUsageEditor
+                  optionType="product_type"
+                  optionId={item.id}
+                  materials={materials}
+                  schemaReady={isMaterialLinkSchemaReady}
+                  links={getMaterialLinks("product_type", item.id)}
+                  onChange={(links) => updateMaterialLinks("product_type", item.id, links)}
+                />
               </div>
             ))}
           </div>
@@ -282,6 +385,16 @@ export function AdminConfiguratorManager() {
                 <Field label="สต็อกวัสดุ" help="จำนวนชุดวัสดุที่พร้อมผลิต ใช้แสดงในหน้าออกแบบ" type="number" value={item.materialStock} onChange={(value) => updateList("flowerTypes", index, { materialStock: toNumber(value) })} />
                 <ToggleField label="เปิดขาย" checked={item.available} onChange={(checked) => updateList("flowerTypes", index, { available: checked })} />
                 <DeleteButton onClick={() => removeListItem("flowerTypes", item.id)} />
+                <div className="xl:col-span-6">
+                  <MaterialUsageEditor
+                    optionType="flower_type"
+                    optionId={item.id}
+                    materials={materials}
+                    schemaReady={isMaterialLinkSchemaReady}
+                    links={getMaterialLinks("flower_type", item.id)}
+                    onChange={(links) => updateMaterialLinks("flower_type", item.id, links)}
+                  />
+                </div>
               </div>
             ))}
           </div>
@@ -299,6 +412,16 @@ export function AdminConfiguratorManager() {
                 <Field label="ราคาเพิ่ม" help="ราคาเพิ่มเมื่อเลือกสีนี้ ถ้าไม่มีราคาเพิ่มให้ใส่ 0" type="number" value={item.price} onChange={(value) => updateList("colors", index, { price: toNumber(value) })} />
                 <ToggleField label="มีสต็อก" checked={item.inStock} onChange={(checked) => updateList("colors", index, { inStock: checked })} />
                 <DeleteButton onClick={() => removeListItem("colors", item.id)} />
+                <div className="lg:col-span-5">
+                  <MaterialUsageEditor
+                    optionType="color"
+                    optionId={item.id}
+                    materials={materials}
+                    schemaReady={isMaterialLinkSchemaReady}
+                    links={getMaterialLinks("color", item.id)}
+                    onChange={(links) => updateMaterialLinks("color", item.id, links)}
+                  />
+                </div>
               </div>
             ))}
           </div>
@@ -306,10 +429,10 @@ export function AdminConfiguratorManager() {
 
         {activeTab === "stems" ? (
           <div className="grid gap-5">
-            <StemEditor title="ความแข็งแรง" items={catalog.stems.strengths} onAdd={() => addStem("strengths")} onRemove={(id) => removeStem("strengths", id)} onChange={(id, patch) => updateStem("strengths", id, patch)} />
-            <StemEditor title="รูปแบบก้าน" items={catalog.stems.styles} onAdd={() => addStem("styles")} onRemove={(id) => removeStem("styles", id)} onChange={(id, patch) => updateStem("styles", id, patch)} />
-            <StemEditor title="ความยาว" items={catalog.stems.lengths} onAdd={() => addStem("lengths")} onRemove={(id) => removeStem("lengths", id)} onChange={(id, patch) => updateStem("lengths", id, patch)} />
-            <StemEditor title="สีก้าน" items={catalog.stems.colors} colorMode onAdd={() => addStem("colors")} onRemove={(id) => removeStem("colors", id)} onChange={(id, patch) => updateStem("colors", id, patch)} />
+            <StemEditor title="ความแข็งแรง" items={catalog.stems.strengths} materials={materials} schemaReady={isMaterialLinkSchemaReady} getLinks={getMaterialLinks} onLinksChange={updateMaterialLinks} onAdd={() => addStem("strengths")} onRemove={(id) => removeStem("strengths", id)} onChange={(id, patch) => updateStem("strengths", id, patch)} />
+            <StemEditor title="รูปแบบก้าน" items={catalog.stems.styles} materials={materials} schemaReady={isMaterialLinkSchemaReady} getLinks={getMaterialLinks} onLinksChange={updateMaterialLinks} onAdd={() => addStem("styles")} onRemove={(id) => removeStem("styles", id)} onChange={(id, patch) => updateStem("styles", id, patch)} />
+            <StemEditor title="ความยาว" items={catalog.stems.lengths} materials={materials} schemaReady={isMaterialLinkSchemaReady} getLinks={getMaterialLinks} onLinksChange={updateMaterialLinks} onAdd={() => addStem("lengths")} onRemove={(id) => removeStem("lengths", id)} onChange={(id, patch) => updateStem("lengths", id, patch)} />
+            <StemEditor title="สีก้าน" items={catalog.stems.colors} colorMode materials={materials} schemaReady={isMaterialLinkSchemaReady} getLinks={getMaterialLinks} onLinksChange={updateMaterialLinks} onAdd={() => addStem("colors")} onRemove={(id) => removeStem("colors", id)} onChange={(id, patch) => updateStem("colors", id, patch)} />
           </div>
         ) : null}
 
@@ -319,6 +442,11 @@ export function AdminConfiguratorManager() {
               title="การจัดช่อ"
               items={catalog.wrappingOptions}
               hasColor
+              optionType="wrapping"
+              materials={materials}
+              schemaReady={isMaterialLinkSchemaReady}
+              getLinks={getMaterialLinks}
+              onLinksChange={updateMaterialLinks}
               onAdd={() => addRecord("wrappingOptions", { id: makeId("wrap"), name: "", description: "", price: 0, color: "#FFFFFF" })}
               onRemove={(id) => removeRecord("wrappingOptions", id)}
               onChange={(id, patch) => updateRecord("wrappingOptions", id as WrapId, patch)}
@@ -327,6 +455,11 @@ export function AdminConfiguratorManager() {
               title="ริบบิ้น"
               items={catalog.ribbonOptions}
               hasColor
+              optionType="ribbon"
+              materials={materials}
+              schemaReady={isMaterialLinkSchemaReady}
+              getLinks={getMaterialLinks}
+              onLinksChange={updateMaterialLinks}
               onAdd={() => addRecord("ribbonOptions", { id: makeId("ribbon"), name: "", price: 0, color: "#FFFFFF" })}
               onRemove={(id) => removeRecord("ribbonOptions", id)}
               onChange={(id, patch) => updateRecord("ribbonOptions", id as RibbonId, patch)}
@@ -338,6 +471,11 @@ export function AdminConfiguratorManager() {
           <RecordEditor
             title="ของตกแต่ง"
             items={catalog.decorationOptions}
+            optionType="decoration"
+            materials={materials}
+            schemaReady={isMaterialLinkSchemaReady}
+            getLinks={getMaterialLinks}
+            onLinksChange={updateMaterialLinks}
             onAdd={() => addRecord("decorationOptions", { id: makeId("decoration"), name: "", description: "", price: 0 })}
             onRemove={(id) => removeRecord("decorationOptions", id)}
             onChange={(id, patch) => updateRecord("decorationOptions", id as DecorationId, patch)}
@@ -618,11 +756,141 @@ function ToggleField({ label, checked, onChange }: { label: string; checked: boo
   );
 }
 
-function DeleteButton({ onClick }: { onClick: () => void }) {
+function MoveButton({ label, icon, disabled, onClick }: { label: string; icon: "up" | "down"; disabled: boolean; onClick: () => void }) {
+  const Icon = icon === "up" ? ArrowUp : ArrowDown;
+
   return (
-    <button type="button" onClick={onClick} className="touch-target w-full rounded-soft border border-pink-200 px-3 py-2 text-sm font-bold text-ink hover:bg-blush">
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className="touch-target inline-flex items-center justify-center gap-1 rounded-soft border border-pink-200 bg-white px-3 py-2 text-sm font-bold text-ink transition hover:bg-blush disabled:cursor-not-allowed disabled:opacity-45"
+    >
+      <Icon size={16} aria-hidden="true" />
+      {label}
+    </button>
+  );
+}
+
+function DeleteButton({ onClick, fullWidth = true }: { onClick: () => void; fullWidth?: boolean }) {
+  return (
+    <button type="button" onClick={onClick} className={`touch-target rounded-soft border border-pink-200 px-3 py-2 text-sm font-bold text-ink hover:bg-blush ${fullWidth ? "w-full" : "min-w-20"}`}>
       ลบ
     </button>
+  );
+}
+
+function MaterialUsageEditor({
+  optionType,
+  optionId,
+  materials,
+  schemaReady,
+  links,
+  onChange
+}: {
+  optionType: DesignOptionMaterialLink["optionType"];
+  optionId: string;
+  materials: AdminMaterial[];
+  schemaReady: boolean;
+  links: DesignOptionMaterialLink[];
+  onChange: (links: DesignOptionMaterialLink[]) => void;
+}) {
+  function addLink() {
+    if (!schemaReady) {
+      toast.warning("ยังผูกวัสดุไม่ได้ กรุณารัน supabase/schema.sql ก่อน");
+      return;
+    }
+
+    const firstMaterial = materials.find((material) => !links.some((link) => link.materialId === material.id));
+    if (!firstMaterial) {
+      toast.warning(materials.length ? "เลือกวัสดุครบแล้ว" : "กรุณาเพิ่มวัสดุในหน้า วัสดุ ก่อน");
+      return;
+    }
+
+    onChange([
+      ...links,
+      {
+        optionType,
+        optionId,
+        materialId: firstMaterial.id,
+        quantityPerUnit: 1
+      }
+    ]);
+  }
+
+  function updateLink(index: number, patch: Partial<DesignOptionMaterialLink>) {
+    onChange(links.map((link, currentIndex) => currentIndex === index ? { ...link, ...patch, optionType, optionId } : link));
+  }
+
+  function removeLink(index: number) {
+    onChange(links.filter((_, currentIndex) => currentIndex !== index));
+  }
+
+  return (
+    <div className="rounded-soft border border-pink-100 bg-white/80 p-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <p className="text-sm font-bold text-ink">วัสดุที่ใช้</p>
+          <p className="text-xs font-semibold text-zinc-500">เลือกจากสต็อกวัสดุ ไม่ต้องพิมพ์ชื่อวัสดุซ้ำ</p>
+        </div>
+        <button type="button" onClick={addLink} disabled={!schemaReady} className="rounded-soft bg-blush px-3 py-2 text-sm font-bold text-ink hover:bg-pink-100 disabled:cursor-not-allowed disabled:opacity-55">
+          เพิ่มวัสดุที่ใช้
+        </button>
+      </div>
+      {!schemaReady ? (
+        <p className="mt-3 rounded-soft bg-yellow-50 p-3 text-sm font-semibold text-yellow-700">
+          ยังใช้ระบบผูกวัสดุไม่ได้ ต้องรัน supabase/schema.sql เพื่อสร้างตาราง design_option_materials ก่อน
+        </p>
+      ) : materials.length ? (
+        links.length ? (
+          <div className="mt-3 grid gap-2">
+            {links.map((link, index) => {
+              const selectedMaterial = materials.find((material) => material.id === link.materialId);
+
+              return (
+                <div key={`${link.materialId}-${index}`} className="grid gap-2 rounded-soft bg-blush/55 p-2 sm:grid-cols-[minmax(0,1fr)_130px_76px] sm:items-end">
+                  <label className="block">
+                    <span className="mb-1 block text-xs font-bold text-ink">วัสดุ</span>
+                    <select
+                      value={link.materialId}
+                      onChange={(event) => updateLink(index, { materialId: event.target.value })}
+                      className="touch-target w-full rounded-soft border border-pink-100 bg-white px-3 text-sm font-semibold"
+                    >
+                      {materials.map((material) => (
+                        <option key={material.id} value={material.id}>
+                          {material.name} ({material.stock.toLocaleString("th-TH")} {material.unit})
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="block">
+                    <span className="mb-1 block text-xs font-bold text-ink">จำนวนที่ใช้</span>
+                    <div className="grid grid-cols-[1fr_auto] overflow-hidden rounded-soft border border-pink-100 bg-white">
+                      <input
+                        type="number"
+                        min={0}
+                        step="0.01"
+                        value={link.quantityPerUnit}
+                        onChange={(event) => updateLink(index, { quantityPerUnit: toNumber(event.target.value) })}
+                        className="min-w-0 border-0 bg-transparent px-3 outline-none"
+                      />
+                      <span className="grid place-items-center bg-blush px-2 text-xs font-bold text-zinc-600">{selectedMaterial?.unit ?? "หน่วย"}</span>
+                    </div>
+                  </label>
+                  <button type="button" onClick={() => removeLink(index)} className="touch-target rounded-soft border border-pink-200 bg-white px-3 text-sm font-bold text-ink">
+                    ลบ
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <p className="mt-3 rounded-soft bg-blush/50 p-3 text-sm font-semibold text-zinc-600">ยังไม่ได้ผูกวัสดุกับตัวเลือกนี้</p>
+        )
+      ) : (
+        <p className="mt-3 rounded-soft bg-yellow-50 p-3 text-sm font-semibold text-yellow-700">ยังไม่มีวัสดุในสต็อก ให้เพิ่มในหน้า วัสดุ ก่อน</p>
+      )}
+    </div>
   );
 }
 
@@ -630,6 +898,10 @@ function StemEditor({
   title,
   items,
   colorMode = false,
+  materials,
+  schemaReady,
+  getLinks,
+  onLinksChange,
   onAdd,
   onRemove,
   onChange
@@ -637,6 +909,10 @@ function StemEditor({
   title: string;
   items: Record<string, { id: string; name: string; description?: string; price: number; hex?: string }>;
   colorMode?: boolean;
+  materials: AdminMaterial[];
+  schemaReady: boolean;
+  getLinks: (optionType: DesignOptionMaterialLink["optionType"], optionId: string) => DesignOptionMaterialLink[];
+  onLinksChange: (optionType: DesignOptionMaterialLink["optionType"], optionId: string, links: DesignOptionMaterialLink[]) => void;
   onAdd: () => void;
   onRemove: (id: string) => void;
   onChange: (id: string, patch: Record<string, unknown>) => void;
@@ -659,6 +935,16 @@ function StemEditor({
             <DeleteButton onClick={() => onRemove(item.id)} />
             {!colorMode ? <div className="sm:col-span-3"><Field label="รายละเอียด" value={item.description ?? ""} onChange={(value) => onChange(item.id, { description: value })} /></div> : null}
             {colorMode ? <div className="sm:col-span-3"><ColorField label="รหัสสี" value={item.hex ?? ""} onChange={(value) => onChange(item.id, { hex: value })} /></div> : null}
+            <div className="sm:col-span-3">
+              <MaterialUsageEditor
+                optionType="stem"
+                optionId={item.id}
+                materials={materials}
+                schemaReady={schemaReady}
+                links={getLinks("stem", item.id)}
+                onChange={(links) => onLinksChange("stem", item.id, links)}
+              />
+            </div>
           </div>
         )) : (
           <div className="rounded-soft border border-dashed border-pink-200 bg-blush/40 p-4 text-sm font-semibold text-zinc-600 lg:col-span-2">
@@ -674,6 +960,11 @@ function RecordEditor({
   title,
   items,
   hasColor = false,
+  optionType,
+  materials,
+  schemaReady,
+  getLinks,
+  onLinksChange,
   onAdd,
   onRemove,
   onChange
@@ -681,6 +972,11 @@ function RecordEditor({
   title: string;
   items: Record<string, { id: string; name: string; description?: string; price: number; color?: string }>;
   hasColor?: boolean;
+  optionType: DesignOptionMaterialLink["optionType"];
+  materials: AdminMaterial[];
+  schemaReady: boolean;
+  getLinks: (optionType: DesignOptionMaterialLink["optionType"], optionId: string) => DesignOptionMaterialLink[];
+  onLinksChange: (optionType: DesignOptionMaterialLink["optionType"], optionId: string, links: DesignOptionMaterialLink[]) => void;
   onAdd: () => void;
   onRemove: (id: string) => void;
   onChange: (id: string, patch: Record<string, unknown>) => void;
@@ -700,6 +996,16 @@ function RecordEditor({
             <Field label="ราคา" type="number" value={item.price} onChange={(value) => onChange(item.id, { price: toNumber(value) })} />
             {"description" in item ? <Field label="รายละเอียด" value={item.description ?? ""} onChange={(value) => onChange(item.id, { description: value })} /> : null}
             {hasColor ? <div className="sm:col-span-2"><ColorField label="สี" value={item.color ?? ""} onChange={(value) => onChange(item.id, { color: value })} /></div> : null}
+            <div className="sm:col-span-2">
+              <MaterialUsageEditor
+                optionType={optionType}
+                optionId={item.id}
+                materials={materials}
+                schemaReady={schemaReady}
+                links={getLinks(optionType, item.id)}
+                onChange={(links) => onLinksChange(optionType, item.id, links)}
+              />
+            </div>
             <button type="button" onClick={() => onRemove(item.id)} className="touch-target rounded-soft border border-pink-200 px-3 py-2 text-sm font-bold text-ink">
               ลบ
             </button>

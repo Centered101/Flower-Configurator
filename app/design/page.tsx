@@ -14,6 +14,7 @@ import { PriceSummary } from "@/components/configurator/PriceSummary";
 import { ProductPreview } from "@/components/configurator/ProductPreview";
 import { StickyOrderBar } from "@/components/configurator/StickyOrderBar";
 import { isStepComplete } from "@/lib/configurator";
+import { getOptionMaterialMeta, isOptionMaterialAvailable, joinOptionMeta } from "@/lib/material-availability";
 import type { ColorId, DecorationId, FlowerColor, FlowerTypeId, ProductTypeId, RibbonId, StemColor, StemStrength, StemStyle, WrapId } from "@/lib/types";
 
 function DesignFlow() {
@@ -75,9 +76,22 @@ function DesignFlow() {
             {step === 0 && (
               productTypes.length ? (
                 <div className="grid gap-3 sm:grid-cols-2">
-                  {productTypes.map((item) => (
-                    <OptionCard key={item.id} selected={config.productType === item.id} title={item.name} subtitle={item.description} meta={`ผลิตประมาณ ${item.productionDays} วัน`} price={item.price} tone={item.imageTone} onClick={() => setConfig({ productType: item.id as ProductTypeId })} />
-                  ))}
+                  {productTypes.map((item) => {
+                    const materialMeta = getOptionMaterialMeta(catalog, "product_type", item.id);
+
+                    return (
+                      <OptionCard
+                        key={item.id}
+                        selected={config.productType === item.id}
+                        title={item.name}
+                        subtitle={item.description}
+                        meta={joinOptionMeta(`ผลิตประมาณ ${item.productionDays} วัน`, materialMeta)}
+                        price={item.price}
+                        disabled={!isOptionMaterialAvailable(catalog, "product_type", item.id)}
+                        onClick={() => setConfig({ productType: item.id as ProductTypeId })}
+                      />
+                    );
+                  })}
                 </div>
               ) : <EmptyStep message="ยังไม่มีประเภทสินค้า กรุณาเพิ่มข้อมูลในหน้าแอดมินก่อนเปิดให้ลูกค้าออกแบบ" />
             )}
@@ -85,9 +99,22 @@ function DesignFlow() {
             {step === 1 && (
               flowerTypes.length ? (
                 <div className="grid gap-3 sm:grid-cols-2">
-                  {flowerTypes.map((item) => (
-                    <OptionCard key={item.id} selected={config.flowerType === item.id} title={item.name} subtitle={item.description} meta={`วัสดุพร้อมทำ ${item.materialStock} ชุด`} price={item.price} disabled={!item.available} onClick={() => setConfig({ flowerType: item.id as FlowerTypeId })} />
-                  ))}
+                  {flowerTypes.map((item) => {
+                    const materialMeta = getOptionMaterialMeta(catalog, "flower_type", item.id, config.quantity);
+
+                    return (
+                      <OptionCard
+                        key={item.id}
+                        selected={config.flowerType === item.id}
+                        title={item.name}
+                        subtitle={item.description}
+                        meta={materialMeta ?? `วัสดุพร้อมทำ ${item.materialStock} ชุด`}
+                        price={item.price}
+                        disabled={!item.available || !isOptionMaterialAvailable(catalog, "flower_type", item.id, config.quantity)}
+                        onClick={() => setConfig({ flowerType: item.id as FlowerTypeId })}
+                      />
+                    );
+                  })}
                 </div>
               ) : <EmptyStep message="ยังไม่มีชนิดดอกไม้ กรุณาเพิ่มข้อมูลในหน้าแอดมินก่อน" />
             )}
@@ -103,7 +130,16 @@ function DesignFlow() {
                 </div>
                 {config.colorMode === "single" ? (
                   <div className="grid gap-2 sm:grid-cols-2">
-                    {colors.map((color) => <ColorSwatch key={color.id} color={color as FlowerColor} selected={config.flowerColors[0] === color.id} onSelect={() => setConfig({ flowerColors: Array.from({ length: config.quantity }, () => color.id as ColorId) })} />)}
+                    {colors.map((color) => (
+                      <ColorSwatch
+                        key={color.id}
+                        color={color as FlowerColor}
+                        selected={config.flowerColors[0] === color.id}
+                        materialMeta={getOptionMaterialMeta(catalog, "color", color.id, config.quantity)}
+                        disabled={!isOptionMaterialAvailable(catalog, "color", color.id, config.quantity)}
+                        onSelect={() => setConfig({ flowerColors: Array.from({ length: config.quantity }, () => color.id as ColorId) })}
+                      />
+                    ))}
                   </div>
                 ) : (
                   <div className="space-y-3">
@@ -112,11 +148,18 @@ function DesignFlow() {
                         <p className="mb-2 font-semibold">ดอกที่ {index + 1}</p>
                         <div className="grid gap-2 sm:grid-cols-2">
                           {colors.map((color) => (
-                            <ColorSwatch key={color.id} color={color as FlowerColor} selected={config.flowerColors[index] === color.id} onSelect={() => {
-                              const nextColors = [...config.flowerColors];
-                              nextColors[index] = color.id as ColorId;
-                              setConfig({ flowerColors: nextColors });
-                            }} />
+                            <ColorSwatch
+                              key={color.id}
+                              color={color as FlowerColor}
+                              selected={config.flowerColors[index] === color.id}
+                              materialMeta={getOptionMaterialMeta(catalog, "color", color.id)}
+                              disabled={!isOptionMaterialAvailable(catalog, "color", color.id)}
+                              onSelect={() => {
+                                const nextColors = [...config.flowerColors];
+                                nextColors[index] = color.id as ColorId;
+                                setConfig({ flowerColors: nextColors });
+                              }}
+                            />
                           ))}
                         </div>
                       </div>
@@ -129,15 +172,21 @@ function DesignFlow() {
             {step === 3 && (
               hasStemOptions ? (
                 <div className="space-y-4">
-                  <OptionGroup title="ความแข็งแรง" items={Object.values(stems.strengths)} selected={config.stem.strength} onSelect={(id) => setConfig({ stem: { ...config.stem, strength: id as StemStrength } })} />
-                  <OptionGroup title="รูปแบบก้าน" items={Object.values(stems.styles)} selected={config.stem.style} onSelect={(id) => setConfig({ stem: { ...config.stem, style: id as StemStyle } })} />
-                  <OptionGroup title="ความยาว" items={Object.values(stems.lengths)} selected={String(config.stem.length)} onSelect={(id) => setConfig({ stem: { ...config.stem, length: Number(id) } })} />
+                  <OptionGroup title="ความแข็งแรง" items={Object.values(stems.strengths)} selected={config.stem.strength} optionType="stem" units={config.quantity} onSelect={(id) => setConfig({ stem: { ...config.stem, strength: id as StemStrength } })} />
+                  <OptionGroup title="รูปแบบก้าน" items={Object.values(stems.styles)} selected={config.stem.style} optionType="stem" units={config.quantity} onSelect={(id) => setConfig({ stem: { ...config.stem, style: id as StemStyle } })} />
+                  <OptionGroup title="ความยาว" items={Object.values(stems.lengths)} selected={String(config.stem.length)} optionType="stem" units={config.quantity} onSelect={(id) => setConfig({ stem: { ...config.stem, length: Number(id) } })} />
                   <div className="grid gap-2 sm:grid-cols-2">
-                    {Object.values(stems.colors).map((stem) => (
-                      <button key={stem.id} type="button" onClick={() => setConfig({ stem: { ...config.stem, color: stem.id as StemColor } })} className={`touch-target rounded-soft border p-3 text-left ${config.stem.color === stem.id ? "border-blossom bg-blush" : "border-pink-100 bg-white"}`}>
-                        <span className="inline-block size-5 rounded-full border align-middle" style={{ background: stem.hex }} /> <span className="ml-2 font-semibold">{stem.name}</span>
-                      </button>
-                    ))}
+                    {Object.values(stems.colors).map((stem) => {
+                      const materialMeta = getOptionMaterialMeta(catalog, "stem", stem.id, config.quantity);
+                      const available = isOptionMaterialAvailable(catalog, "stem", stem.id, config.quantity);
+
+                      return (
+                        <button key={stem.id} type="button" disabled={!available} onClick={() => setConfig({ stem: { ...config.stem, color: stem.id as StemColor } })} className={`touch-target rounded-soft border p-3 text-left disabled:cursor-not-allowed disabled:opacity-55 ${config.stem.color === stem.id ? "border-blossom bg-blush" : "border-pink-100 bg-white hover:border-blossom/60"}`}>
+                          <span className="inline-block size-5 rounded-full border align-middle" style={{ background: stem.hex }} /> <span className="ml-2 font-semibold">{stem.name}</span>
+                          {materialMeta ? <span className="mt-1 block text-xs font-semibold text-zinc-500">{materialMeta}</span> : null}
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
               ) : <EmptyStep message="ยังไม่มีตัวเลือกก้าน กรุณาเพิ่มข้อมูลในหน้าแอดมินก่อน" />
@@ -145,8 +194,8 @@ function DesignFlow() {
 
             {step === 4 && (
               <div className="space-y-4">
-                <OptionGroup title="การจัดช่อ" items={Object.values(wrappingOptions)} selected={config.wrapping} onSelect={(id) => setConfig({ wrapping: id as WrapId })} />
-                <OptionGroup title="ริบบิ้น" items={Object.values(ribbonOptions).map((item) => ({ ...item, description: "สีริบบิ้นสำหรับผูกช่อ" }))} selected={config.ribbon} onSelect={(id) => setConfig({ ribbon: id as RibbonId })} />
+                <OptionGroup title="การจัดช่อ" items={Object.values(wrappingOptions)} selected={config.wrapping} optionType="wrapping" onSelect={(id) => setConfig({ wrapping: id as WrapId })} />
+                <OptionGroup title="ริบบิ้น" items={Object.values(ribbonOptions).map((item) => ({ ...item, description: "สีริบบิ้นสำหรับผูกช่อ" }))} selected={config.ribbon} optionType="ribbon" onSelect={(id) => setConfig({ ribbon: id as RibbonId })} />
               </div>
             )}
 
@@ -156,7 +205,10 @@ function DesignFlow() {
                   {Object.values(decorationOptions).map((item) => {
                     const decorationId = item.id as DecorationId;
                     const selected = config.decorations.includes(decorationId);
-                    return <OptionCard key={item.id} selected={selected} title={item.name} subtitle={item.description} price={item.price} onClick={() => setConfig({ decorations: selected ? config.decorations.filter((id) => id !== decorationId) : [...config.decorations, decorationId] })} />;
+                    const materialMeta = getOptionMaterialMeta(catalog, "decoration", item.id);
+                    const available = isOptionMaterialAvailable(catalog, "decoration", item.id);
+
+                    return <OptionCard key={item.id} selected={selected} title={item.name} subtitle={item.description} meta={materialMeta} price={item.price} disabled={!available} onClick={() => setConfig({ decorations: selected ? config.decorations.filter((id) => id !== decorationId) : [...config.decorations, decorationId] })} />;
                   })}
                 </div>
                 {config.decorations.includes("message-card") && (
@@ -189,7 +241,23 @@ function DesignFlow() {
   );
 }
 
-function OptionGroup({ title, items, selected, onSelect }: { title: string; items: { id: string; name: string; description?: string; price: number }[]; selected: string; onSelect: (id: string) => void }) {
+function OptionGroup({
+  title,
+  items,
+  selected,
+  optionType,
+  units = 1,
+  onSelect
+}: {
+  title: string;
+  items: { id: string; name: string; description?: string; price: number }[];
+  selected: string;
+  optionType?: "stem" | "wrapping" | "ribbon";
+  units?: number;
+  onSelect: (id: string) => void;
+}) {
+  const { catalog } = useConfigurator();
+
   return (
     <section>
       <h2 className="mb-2 inline-flex items-center gap-2 font-bold text-ink">
@@ -197,13 +265,19 @@ function OptionGroup({ title, items, selected, onSelect }: { title: string; item
         <HelpTooltip content={`เลือกตัวเลือก${title}ที่ต้องการ ราคาเพิ่มจะแสดงบนการ์ดแต่ละใบ`} />
       </h2>
       {items.length ? <div className="grid gap-2 sm:grid-cols-2">
-        {items.map((item) => (
-          <button key={item.id} type="button" onClick={() => onSelect(item.id)} className={`touch-target rounded-soft border p-3 text-left ${selected === item.id ? "border-blossom bg-blush" : "border-pink-100 bg-white"}`}>
-            <span className="block font-semibold">{item.name}</span>
-            <span className="block text-sm text-zinc-600">{item.description}</span>
-            <span className="mt-1 block text-sm font-bold text-blossom">{item.price ? `+${item.price} บาท` : "รวมในราคา"}</span>
-          </button>
-        ))}
+        {items.map((item) => {
+          const materialMeta = optionType ? getOptionMaterialMeta(catalog, optionType, item.id, units) : undefined;
+          const available = optionType ? isOptionMaterialAvailable(catalog, optionType, item.id, units) : true;
+
+          return (
+            <button key={item.id} type="button" disabled={!available} onClick={() => onSelect(item.id)} className={`touch-target rounded-soft border p-3 text-left disabled:cursor-not-allowed disabled:opacity-55 ${selected === item.id ? "border-blossom bg-blush" : "border-pink-100 bg-white hover:border-blossom/60"}`}>
+              <span className="block font-semibold">{item.name}</span>
+              <span className="block text-sm text-zinc-600">{item.description}</span>
+              {materialMeta ? <span className="mt-1 block text-xs font-semibold text-zinc-500">{materialMeta}</span> : null}
+              <span className="mt-1 block text-sm font-bold text-blossom">{item.price ? `+${item.price} บาท` : "รวมในราคา"}</span>
+            </button>
+          );
+        })}
       </div> : <EmptyStep message={`ยังไม่มีตัวเลือก${title}`} compact />}
     </section>
   );

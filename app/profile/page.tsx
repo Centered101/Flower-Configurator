@@ -12,10 +12,10 @@ import { toast } from "sonner";
 import { Footer } from "@/components/Footer";
 import { HelpTooltip } from "@/components/HelpTooltip";
 import { Navbar } from "@/components/Navbar";
-import { ADMIN_GALLERY_KEY, fetchPublicGalleryItems, readAdminItems, saveAdminItems, type AdminGalleryItem } from "@/lib/admin-data";
+import { ADMIN_GALLERY_KEY, ADMIN_PRODUCTS_KEY, fetchPublicGalleryItems, fetchPublicProducts, readAdminItems, saveAdminItems, type AdminGalleryItem, type AdminProduct } from "@/lib/admin-data";
 import { formatThaiIsoDate } from "@/lib/date-format";
-import { clearFavoriteGalleryItems, getFavoriteGalleryIds, listenForFavoriteUpdates } from "@/lib/favorites";
-import { deleteOrdersForCustomer, getStoredOrders, listenForOrderUpdates } from "@/lib/orders";
+import { clearAllFavorites, getFavoriteGalleryIds, getFavoriteProductIds, listenForFavoriteUpdates, syncFavoritesWithSupabase } from "@/lib/favorites";
+import { deleteOrdersForCustomer, getStoredOrders, listenForOrderUpdates, sortOrdersByOrderNumber } from "@/lib/orders";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import type { CustomerOrder, OrderStatus } from "@/lib/types";
 
@@ -60,6 +60,15 @@ type DataDeletionRequest = {
   createdAt: string;
 };
 
+type CustomerProfile = {
+  displayName: string;
+  firstName: string;
+  lastName: string;
+  phone: string;
+  lineId: string;
+  address: string;
+};
+
 function getDataDeletionRequests() {
   if (typeof window === "undefined") return [];
   try {
@@ -75,6 +84,21 @@ function saveDataDeletionRecord(request: DataDeletionRequest) {
   return next;
 }
 
+function mergeOrders(left: CustomerOrder[], right: CustomerOrder[]) {
+  const map = new Map<string, CustomerOrder>();
+  for (const order of [...left, ...right]) {
+    map.set(order.orderNumber || order.id, order);
+  }
+  return sortOrdersByOrderNumber(Array.from(map.values()));
+}
+
+function paymentBadgeClass(status: CustomerOrder["paymentStatus"]) {
+  if (status === "paid") return "bg-green-50 text-green-700";
+  if (status === "failed") return "bg-red-50 text-red-700";
+  if (status === "awaiting_slip_review") return "bg-yellow-50 text-yellow-700";
+  return "bg-blush text-blossom";
+}
+
 export default function CustomerProfilePage() {
   const router = useRouter();
   const [supabase, setSupabase] = useState<ReturnType<typeof createSupabaseBrowserClient> | null>(null);
@@ -86,6 +110,7 @@ export default function CustomerProfilePage() {
   const [address, setAddress] = useState("");
   const [orders, setOrders] = useState<CustomerOrder[]>([]);
   const [favoriteItems, setFavoriteItems] = useState<AdminGalleryItem[]>([]);
+  const [favoriteProducts, setFavoriteProducts] = useState<AdminProduct[]>([]);
   const [deletionRequests, setDeletionRequests] = useState<DataDeletionRequest[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -108,7 +133,7 @@ export default function CustomerProfilePage() {
       };
     }
 
-    client.auth.getUser().then(({ data }) => {
+    client.auth.getUser().then(async ({ data }) => {
       if (!isMounted) return;
 
       if (!data.user) {
@@ -117,15 +142,40 @@ export default function CustomerProfilePage() {
       }
 
       setUser(data.user);
-      setFirstName(typeof data.user.user_metadata?.first_name === "string" ? data.user.user_metadata.first_name : "");
-      setLastName(typeof data.user.user_metadata?.last_name === "string" ? data.user.user_metadata.last_name : "");
-      setPhone(typeof data.user.user_metadata?.phone === "string" ? data.user.user_metadata.phone : "");
-      setLineId(
-        typeof data.user.user_metadata?.line_id === "string" ? data.user.user_metadata.line_id :
-        typeof data.user.user_metadata?.lineId === "string" ? data.user.user_metadata.lineId :
-        ""
-      );
-      setAddress(typeof data.user.user_metadata?.address === "string" ? data.user.user_metadata.address : "");
+      const metadataProfile = {
+        firstName: typeof data.user.user_metadata?.first_name === "string" ? data.user.user_metadata.first_name : "",
+        lastName: typeof data.user.user_metadata?.last_name === "string" ? data.user.user_metadata.last_name : "",
+        phone: typeof data.user.user_metadata?.phone === "string" ? data.user.user_metadata.phone : "",
+        lineId:
+          typeof data.user.user_metadata?.line_id === "string" ? data.user.user_metadata.line_id :
+          typeof data.user.user_metadata?.lineId === "string" ? data.user.user_metadata.lineId :
+          "",
+        address: typeof data.user.user_metadata?.address === "string" ? data.user.user_metadata.address : ""
+      };
+      let profile = metadataProfile;
+
+      try {
+        const response = await fetch("/api/profile", { cache: "no-store" });
+        if (response.ok) {
+          const savedProfile = await response.json() as CustomerProfile;
+          profile = {
+            firstName: savedProfile.firstName ?? metadataProfile.firstName,
+            lastName: savedProfile.lastName ?? metadataProfile.lastName,
+            phone: savedProfile.phone ?? metadataProfile.phone,
+            lineId: savedProfile.lineId ?? metadataProfile.lineId,
+            address: savedProfile.address ?? metadataProfile.address
+          };
+        }
+      } catch {
+        profile = metadataProfile;
+      }
+
+      if (!isMounted) return;
+      setFirstName(profile.firstName);
+      setLastName(profile.lastName);
+      setPhone(profile.phone);
+      setLineId(profile.lineId);
+      setAddress(profile.address);
       setDeletionRequests(getDataDeletionRequests().filter((request) => request.userId === data.user.id));
       setIsLoading(false);
     });
@@ -141,59 +191,111 @@ export default function CustomerProfilePage() {
     const userEmail = user.email?.toLowerCase();
 
     function syncOrders() {
-      setOrders(getStoredOrders().filter((order) => (
+      const localOrders = getStoredOrders().filter((order) => (
         order.authUserId === userId || (userEmail && order.email?.toLowerCase() === userEmail)
-      )));
+      ));
+      setOrders((current) => mergeOrders(localOrders, current));
     }
 
     syncOrders();
+    fetch("/api/profile/orders", { cache: "no-store" })
+      .then((response) => response.ok ? response.json() : [])
+      .then((remoteOrders: CustomerOrder[]) => {
+        const localOrders = getStoredOrders().filter((order) => (
+          order.authUserId === userId || (userEmail && order.email?.toLowerCase() === userEmail)
+        ));
+        setOrders((current) => mergeOrders([...localOrders, ...current], remoteOrders));
+      })
+      .catch(() => undefined);
+
     return listenForOrderUpdates(syncOrders);
   }, [user]);
 
   useEffect(() => {
     function syncFavorites() {
-      const favoriteIds = getFavoriteGalleryIds();
+      const favoriteGalleryIds = getFavoriteGalleryIds();
+      const favoriteProductIds = getFavoriteProductIds();
       const galleryItems = readAdminItems<AdminGalleryItem>(ADMIN_GALLERY_KEY);
-      setFavoriteItems(galleryItems.filter((item) => favoriteIds.includes(item.id)));
-      fetchPublicGalleryItems()
-        .then((items) => {
+      const productItems = readAdminItems<AdminProduct>(ADMIN_PRODUCTS_KEY);
+      setFavoriteItems(galleryItems.filter((item) => favoriteGalleryIds.includes(item.id)));
+      setFavoriteProducts(productItems.filter((item) => favoriteProductIds.includes(item.id)));
+      Promise.all([
+        fetchPublicGalleryItems(),
+        fetchPublicProducts()
+      ])
+        .then(([items, products]) => {
+          const nextGalleryIds = getFavoriteGalleryIds();
+          const nextProductIds = getFavoriteProductIds();
           saveAdminItems(ADMIN_GALLERY_KEY, items);
-          setFavoriteItems(items.filter((item) => favoriteIds.includes(item.id)));
+          saveAdminItems(ADMIN_PRODUCTS_KEY, products);
+          setFavoriteItems(items.filter((item) => nextGalleryIds.includes(item.id)));
+          setFavoriteProducts(products.filter((item) => nextProductIds.includes(item.id)));
         })
         .catch(() => undefined);
     }
 
     syncFavorites();
+    syncFavoritesWithSupabase().then((favorites) => {
+      const galleryItems = readAdminItems<AdminGalleryItem>(ADMIN_GALLERY_KEY);
+      const productItems = readAdminItems<AdminProduct>(ADMIN_PRODUCTS_KEY);
+      setFavoriteItems(galleryItems.filter((item) => favorites.galleryIds.includes(item.id)));
+      setFavoriteProducts(productItems.filter((item) => favorites.productIds.includes(item.id)));
+      return Promise.all([fetchPublicGalleryItems(), fetchPublicProducts()]).then(([gallery, products]) => {
+        saveAdminItems(ADMIN_GALLERY_KEY, gallery);
+        saveAdminItems(ADMIN_PRODUCTS_KEY, products);
+        setFavoriteItems(gallery.filter((item) => favorites.galleryIds.includes(item.id)));
+        setFavoriteProducts(products.filter((item) => favorites.productIds.includes(item.id)));
+      });
+    }).catch(() => undefined);
     return listenForFavoriteUpdates(syncFavorites);
   }, []);
 
   async function handleSaveProfile(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!user || !supabase || isSaving) return;
+    if (!user || isSaving) return;
 
     setIsSaving(true);
     const nextDisplayName = [firstName.trim(), lastName.trim()].filter(Boolean).join(" ");
-    const { data, error } = await supabase.auth.updateUser({
-      data: {
-        ...user.user_metadata,
-        first_name: firstName.trim(),
-        last_name: lastName.trim(),
-        display_name: nextDisplayName || user.email?.split("@")[0] || "ลูกค้า",
-        phone: phone.trim(),
-        line_id: lineId.trim(),
-        lineId: lineId.trim(),
-        address: address.trim()
-      }
+    const response = await fetch("/api/profile", {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        firstName,
+        lastName,
+        phone,
+        lineId,
+        address
+      })
     });
+    const profile = await response.json().catch(() => null) as (CustomerProfile & { error?: string }) | null;
 
     setIsSaving(false);
 
-    if (error) {
-      toast.error("บันทึกโปรไฟล์ไม่สำเร็จ");
+    if (!response.ok) {
+      toast.error(profile?.error ?? "บันทึกโปรไฟล์ไม่สำเร็จ");
       return;
     }
 
-    if (data.user) setUser(data.user);
+    setFirstName(profile?.firstName ?? firstName.trim());
+    setLastName(profile?.lastName ?? lastName.trim());
+    setPhone(profile?.phone ?? phone.trim());
+    setLineId(profile?.lineId ?? lineId.trim());
+    setAddress(profile?.address ?? address.trim());
+    setUser((current) => current ? {
+      ...current,
+      user_metadata: {
+        ...(current.user_metadata ?? {}),
+        first_name: profile?.firstName ?? firstName.trim(),
+        last_name: profile?.lastName ?? lastName.trim(),
+        display_name: profile?.displayName ?? (nextDisplayName || current.email?.split("@")[0] || "ลูกค้า"),
+        phone: profile?.phone ?? phone.trim(),
+        line_id: profile?.lineId ?? lineId.trim(),
+        lineId: profile?.lineId ?? lineId.trim(),
+        address: profile?.address ?? address.trim()
+      }
+    } : current);
     toast.success("บันทึกโปรไฟล์แล้ว");
   }
 
@@ -250,8 +352,8 @@ export default function CustomerProfilePage() {
     }
 
     const deletedOrders = deleteOrdersForCustomer(user.id, user.email);
-    const deletedFavorites = favoriteItems.length;
-    clearFavoriteGalleryItems();
+    const deletedFavorites = favoriteItems.length + favoriteProducts.length;
+    clearAllFavorites();
 
     saveDataDeletionRecord({
       id: crypto.randomUUID(),
@@ -270,6 +372,7 @@ export default function CustomerProfilePage() {
     setAddress("");
     setOrders([]);
     setFavoriteItems([]);
+    setFavoriteProducts([]);
     setDeletionRequests([]);
     await signOutCustomerSession();
     setIsDeletingData(false);
@@ -423,7 +526,14 @@ export default function CustomerProfilePage() {
                             <h3 className="text-lg font-bold text-ink">{order.customerName}</h3>
                           </div>
                           <div className="flex flex-wrap items-center gap-2">
-                            <span className="rounded-full bg-blush px-3 py-1 text-sm font-bold text-blossom">{orderStatusLabels[order.orderStatus]}</span>
+                            <span className={`rounded-full px-3 py-1 text-sm font-bold ${paymentBadgeClass(order.paymentStatus)}`}>
+                              {paymentStatusLabels[order.paymentStatus]}
+                            </span>
+                            {order.paymentStatus === "paid" && order.orderStatus !== "awaiting_payment" ? (
+                              <span className="rounded-full bg-blush px-3 py-1 text-sm font-bold text-blossom">
+                                {orderStatusLabels[order.orderStatus]}
+                              </span>
+                            ) : null}
                             <Link
                               href={`/track?order=${encodeURIComponent(order.orderNumber)}${order.phone ? `&phone=${encodeURIComponent(order.phone.slice(-4))}` : ""}`}
                               className="inline-flex items-center gap-1 rounded-full border border-pink-100 bg-white px-3 py-1 text-sm font-bold text-ink transition-colors hover:border-blossom hover:text-blossom focus:outline-none focus:ring-2 focus:ring-blossom/30"
@@ -453,13 +563,38 @@ export default function CustomerProfilePage() {
                 <section className="space-y-3 rounded-bloom border border-pink-100 bg-white p-5 shadow-sm">
                 <div className="flex items-center gap-2">
                   <Heart size={20} className="text-blossom" fill="currentColor" aria-hidden="true" />
-                  <h2 className="font-bold text-ink">ผลงานที่ถูกใจ</h2>
-                  <HelpTooltip content="รายการที่กดหัวใจจากหน้าแกลเลอรี จะถูกเก็บไว้ให้กลับมาดูทีหลัง" />
+                  <h2 className="font-bold text-ink">รายการที่ถูกใจ</h2>
+                  <HelpTooltip content="รายการที่กดหัวใจจากหน้าแรกหรือแกลเลอรี จะถูกเก็บในบัญชีและกลับมาดูได้หลังเข้าสู่ระบบใหม่" />
                 </div>
-                {favoriteItems.length ? (
+                {favoriteItems.length || favoriteProducts.length ? (
                   <div className="grid gap-3 sm:grid-cols-2">
+                    {favoriteProducts.map((item) => (
+                      <article key={`product-${item.id}`} className="overflow-hidden rounded-soft border border-pink-100 bg-white shadow-sm">
+                        {item.image ? (
+                          <div className="relative h-52 overflow-hidden rounded-t-soft bg-blush">
+                            <Image
+                              src={item.image.url}
+                              alt={item.name}
+                              fill
+                              sizes="(min-width: 1024px) 280px, (min-width: 640px) 45vw, 100vw"
+                              draggable={false}
+                              onContextMenu={(event) => event.preventDefault()}
+                              className="select-none object-cover"
+                            />
+                          </div>
+                        ) : (
+                          <div className="h-52 bg-gradient-to-br from-blush via-white to-pink-100" />
+                        )}
+                        <div className="p-3">
+                          <p className="mb-1 text-xs font-bold text-blossom">สินค้า</p>
+                          <h3 className="font-bold text-ink">{item.name}</h3>
+                          <p className="mt-1 text-sm text-zinc-600">{item.description}</p>
+                          <p className="mt-2 font-bold text-blossom">{item.basePrice.toLocaleString("th-TH")} บาท</p>
+                        </div>
+                      </article>
+                    ))}
                     {favoriteItems.map((item) => (
-                      <article key={item.id} className="overflow-hidden rounded-soft border border-pink-100 bg-white shadow-sm">
+                      <article key={`gallery-${item.id}`} className="overflow-hidden rounded-soft border border-pink-100 bg-white shadow-sm">
                         {item.image ? (
                           <div className="relative h-52 overflow-hidden rounded-t-soft bg-blush">
                             <Image
@@ -476,6 +611,7 @@ export default function CustomerProfilePage() {
                           <div className="h-52 bg-gradient-to-br from-blush via-white to-pink-100" />
                         )}
                         <div className="p-3">
+                          <p className="mb-1 text-xs font-bold text-blossom">ผลงาน</p>
                           <h3 className="font-bold text-ink">{item.title}</h3>
                           <p className="mt-1 text-sm text-zinc-600">{item.flower} / {item.color} / {item.size}</p>
                           <p className="mt-2 font-bold text-blossom">{item.price} บาท</p>
@@ -484,7 +620,7 @@ export default function CustomerProfilePage() {
                     ))}
                   </div>
                 ) : (
-                  <p className="rounded-soft border border-pink-100 bg-white p-4 text-sm font-semibold text-zinc-600">ยังไม่มีผลงานที่ถูกใจ กดหัวใจที่หน้าแกลเลอรีเพื่อเก็บไว้ดูทีหลัง</p>
+                  <p className="rounded-soft border border-pink-100 bg-white p-4 text-sm font-semibold text-zinc-600">ยังไม่มีรายการที่ถูกใจ กดหัวใจที่หน้าแรกหรือแกลเลอรีเพื่อเก็บไว้ดูทีหลัง</p>
                 )}
                 </section>
 
@@ -503,7 +639,7 @@ export default function CustomerProfilePage() {
                   </p>
                   <form onSubmit={handleDeleteMyData} className="space-y-3">
                     <div className="rounded-soft border border-pink-100 bg-blush p-4 text-sm leading-6 text-zinc-700">
-                      ถ้ายังไม่ชำระเงิน ระบบจะลบบัญชี Auth, ข้อมูลติดต่อ, ประวัติคำสั่งซื้อที่ผูกกับบัญชีนี้ และผลงานที่ถูกใจทันที ถ้าชำระเงินแล้วต้องติดต่อร้านก่อนเพื่อป้องกันปัญหาการตรวจสอบคำสั่งซื้อ
+                      ถ้ายังไม่ชำระเงิน ระบบจะลบบัญชี Auth, ข้อมูลติดต่อ, ประวัติคำสั่งซื้อที่ผูกกับบัญชีนี้ และรายการที่ถูกใจทันที ถ้าชำระเงินแล้วต้องติดต่อร้านก่อนเพื่อป้องกันปัญหาการตรวจสอบคำสั่งซื้อ
                     </div>
                     <button
                       type="submit"
@@ -520,7 +656,7 @@ export default function CustomerProfilePage() {
                       <p className="font-bold text-ink">การลบข้อมูลล่าสุด</p>
                       <p className="mt-1 text-zinc-600">{formatThaiIsoDate(deletionRequests[0].createdAt.slice(0, 10))}</p>
                       <p className="mt-2 font-semibold text-blossom">
-                        ลบคำสั่งซื้อ {deletionRequests[0].deletedOrders} รายการ และผลงานที่ถูกใจ {deletionRequests[0].deletedFavorites} รายการ
+                        ลบคำสั่งซื้อ {deletionRequests[0].deletedOrders} รายการ และรายการที่ถูกใจ {deletionRequests[0].deletedFavorites} รายการ
                       </p>
                     </div>
                   ) : null}

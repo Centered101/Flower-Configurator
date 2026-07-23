@@ -37,13 +37,24 @@ insert into public.admin_users (
 
 -- ตัวเลือกประเภทสินค้าสำหรับหน้าออกแบบ ให้เก็บแยกจาก public.products:
 -- insert into public.configurator_product_types (
---   slug, name_th, description, base_price, base_quantity, production_score, production_days
+--   slug, name_th, description, base_price, base_quantity, production_score, production_days, image_url, image_path, image_width, image_height, image_format, image_size, sort_order
 -- ) values (
---   'bouquet-3', 'ช่อ 3 ดอก', 'ตัวเลือกสำหรับหน้าออกแบบ', 49, 3, 3, 2
+--   'bouquet-3', 'ช่อ 3 ดอก', 'ตัวเลือกสำหรับหน้าออกแบบ', 49, 3, 3, 2, null, null, null, null, null, null, 0
 -- ) on conflict (slug) do update set
 --   name_th = excluded.name_th,
 --   description = excluded.description,
 --   base_price = excluded.base_price,
 --   base_quantity = excluded.base_quantity,
 --   production_score = excluded.production_score,
---   production_days = excluded.production_days;
+--   production_days = excluded.production_days,
+--   image_url = excluded.image_url,
+--   image_path = excluded.image_path,
+--   image_width = excluded.image_width,
+--   image_height = excluded.image_height,
+--   image_format = excluded.image_format,
+--   image_size = excluded.image_size,
+--   sort_order = excluded.sort_order;
+
+-- ตัวอย่างสต็อกวัสดุ
+-- รันซ้ำได้ เพราะใช้ id คงที่และ on conflict
+-- หลังรันแล้วสามารถแก้ไข/ลบ/เพิ่มของจริงได้จากหน้า admin/materials

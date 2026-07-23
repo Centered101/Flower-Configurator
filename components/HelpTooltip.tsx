@@ -24,8 +24,37 @@ export function HelpTooltip({
   panelClassName = ""
 }: HelpTooltipProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const [position, setPosition] = useState({ left: 16, top: 16 });
   const panelId = useId();
   const rootRef = useRef<HTMLSpanElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    function updatePosition() {
+      const rect = buttonRef.current?.getBoundingClientRect();
+      if (!rect) return;
+
+      const panelWidth = Math.min(280, window.innerWidth - 32);
+      const preferredLeft = side === "left" ? rect.right - panelWidth : rect.left;
+      const left = Math.min(Math.max(16, preferredLeft), window.innerWidth - panelWidth - 16);
+      const preferredTop = align === "middle" ? rect.top + rect.height / 2 - 72 : rect.bottom + 8;
+      const maxTop = Math.max(16, window.innerHeight - 180);
+      const top = Math.min(Math.max(16, preferredTop), maxTop);
+
+      setPosition({ left, top });
+    }
+
+    updatePosition();
+    window.addEventListener("resize", updatePosition);
+    window.addEventListener("scroll", updatePosition, true);
+
+    return () => {
+      window.removeEventListener("resize", updatePosition);
+      window.removeEventListener("scroll", updatePosition, true);
+    };
+  }, [align, isOpen, side]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -52,6 +81,7 @@ export function HelpTooltip({
   return (
     <span ref={rootRef} className={`relative inline-flex shrink-0 ${className}`}>
       <button
+        ref={buttonRef}
         type="button"
         suppressHydrationWarning
         onClick={() => setIsOpen((current) => !current)}
@@ -66,9 +96,8 @@ export function HelpTooltip({
         <span
           id={panelId}
           role="tooltip"
-          className={`absolute z-[80] w-[min(300px,calc(100vw-40px))] rounded-soft border border-pink-100 bg-white p-4 text-left text-sm leading-6 text-zinc-700 shadow-soft ${
-            side === "left" ? "right-0" : "left-0"
-          } ${align === "middle" ? "top-1/2 -translate-y-1/2" : "top-10"} ${panelClassName}`}
+          className={`fixed z-[80] max-h-[min(320px,calc(100vh-32px))] w-[min(280px,calc(100vw-32px))] overflow-auto rounded-soft border border-pink-100 bg-white p-4 text-left text-sm leading-6 text-zinc-700 shadow-soft ${panelClassName}`}
+          style={{ left: position.left, top: position.top }}
         >
           <span className="flex items-start justify-between gap-3">
             {title ? <strong className="text-ink">{title}</strong> : null}

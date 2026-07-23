@@ -8,7 +8,7 @@ import { Footer } from "@/components/Footer";
 import { EmptyState } from "@/components/EmptyState";
 import { OrderableItemCard } from "@/components/OrderableItemCard";
 import { ADMIN_GALLERY_KEY, fetchPublicGalleryItems, readAdminItems, saveAdminItems, type AdminGalleryItem } from "@/lib/admin-data";
-import { getFavoriteGalleryIds, listenForFavoriteUpdates, toggleFavoriteGalleryItem } from "@/lib/favorites";
+import { getFavoriteGalleryIds, listenForFavoriteUpdates, syncFavoritesWithSupabase, toggleFavoriteGalleryItem } from "@/lib/favorites";
 import { saveQuickOrder } from "@/lib/quick-order";
 
 function GalleryContent() {
@@ -32,6 +32,7 @@ function GalleryContent() {
       })
       .catch(() => setGalleryItems(localItems));
     setFavoriteIds(getFavoriteGalleryIds());
+    syncFavoritesWithSupabase().then((favorites) => setFavoriteIds(favorites.galleryIds)).catch(() => undefined);
   }, []);
 
   useEffect(() => {

@@ -9,7 +9,7 @@ import { EmptyState } from "@/components/EmptyState";
 import { HelpTooltip } from "@/components/HelpTooltip";
 import { StatusTimeline } from "@/components/StatusTimeline";
 import { formatThaiIsoDate } from "@/lib/date-format";
-import { findOrder, getStoredOrders, listenForOrderUpdates } from "@/lib/orders";
+import { findOrder, getStoredOrders, listenForOrderUpdates, sortOrdersByOrderNumber } from "@/lib/orders";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import type { CustomerOrder, OrderStatus } from "@/lib/types";
 
@@ -79,6 +79,14 @@ function fulfillmentText(order: CustomerOrder) {
   return `${formatThaiIsoDate(order.pickupDate)} ${order.pickupTime}`;
 }
 
+function mergeOrders(left: CustomerOrder[], right: CustomerOrder[]) {
+  const map = new Map<string, CustomerOrder>();
+  for (const order of [...left, ...right]) {
+    map.set(order.orderNumber || order.id, order);
+  }
+  return sortOrdersByOrderNumber(Array.from(map.values()));
+}
+
 export default function TrackPage() {
   const [orderNumber, setOrderNumber] = useState("");
   const [orderDate, setOrderDate] = useState("");
@@ -106,7 +114,7 @@ export default function TrackPage() {
 
   useEffect(() => {
     function syncOrders() {
-      setOrders(getStoredOrders());
+      setOrders((current) => mergeOrders(getStoredOrders(), current));
     }
 
     syncOrders();
@@ -128,6 +136,13 @@ export default function TrackPage() {
             email: data.user.email?.toLowerCase(),
             phone: typeof data.user.user_metadata?.phone === "string" ? data.user.user_metadata.phone : undefined
           });
+          fetch("/api/profile/orders", { cache: "no-store" })
+            .then((response) => response.ok ? response.json() : [])
+            .then((remoteOrders: CustomerOrder[]) => {
+              if (!isMounted) return;
+              setOrders((current) => mergeOrders(current, remoteOrders));
+            })
+            .catch(() => undefined);
         })
         .catch(() => {
           if (isMounted) setCustomerKey({});
@@ -140,6 +155,20 @@ export default function TrackPage() {
       isMounted = false;
     };
   }, []);
+
+  useEffect(() => {
+    if (!orderNumber.trim()) return;
+    const normalizedOrder = orderNumber.trim().toLowerCase();
+    const normalizedPhone = getPhoneDigits(lastFour).slice(-4);
+    const matchedOrder = orders.find((item) => {
+      const orderMatches = item.orderNumber.toLowerCase() === normalizedOrder;
+      const phoneMatches = normalizedPhone ? getPhoneDigits(item.phone).endsWith(normalizedPhone) : true;
+      return orderMatches && phoneMatches;
+    });
+
+    if (matchedOrder && matchedOrder !== order) setOrder(matchedOrder);
+    if (!matchedOrder && order === undefined) setOrder(null);
+  }, [lastFour, order, orderNumber, orders]);
 
   const quickOrders = useMemo(() => {
     const customerPhoneDigits = customerKey.phone ? getPhoneDigits(customerKey.phone) : "";
@@ -212,7 +241,7 @@ export default function TrackPage() {
     <>
       <Navbar />
       <main className="container-page min-h-screen py-8">
-        <section className="mx-auto max-w-5xl rounded-bloom border border-pink-100 bg-white p-5 shadow-sm">
+        <section className="w-full rounded-bloom border border-pink-100 bg-white p-5 shadow-sm">
           <div className="flex items-center gap-2">
             <Search size={24} className="text-blossom" aria-hidden="true" />
             <h1 className="text-3xl font-bold text-ink">ติดตามคำสั่งซื้อ</h1>
@@ -298,7 +327,7 @@ export default function TrackPage() {
         </section>
 
         {quickOrders.length ? (
-          <section className="mx-auto mt-5 max-w-5xl rounded-bloom border border-pink-100 bg-white p-5 shadow-sm">
+          <section className="mt-5 w-full rounded-bloom border border-pink-100 bg-white p-5 shadow-sm">
             <div className="flex items-center gap-2">
               <PackageCheck size={20} className="text-blossom" aria-hidden="true" />
               <h2 className="font-bold text-ink">{customerKey.userId ? "คำสั่งซื้อของฉัน" : "คำสั่งซื้อล่าสุดในเครื่องนี้"}</h2>
@@ -332,7 +361,7 @@ export default function TrackPage() {
         ) : null}
 
         {searchResults.length ? (
-          <section className="mx-auto mt-5 max-w-5xl rounded-bloom border border-pink-100 bg-white p-5 shadow-sm">
+          <section className="mt-5 w-full rounded-bloom border border-pink-100 bg-white p-5 shadow-sm">
             <h2 className="font-bold text-ink">พบหลายรายการ</h2>
             <div className="mt-3 grid gap-3 md:grid-cols-2">
               {searchResults.map((item) => (
@@ -352,7 +381,7 @@ export default function TrackPage() {
 
         {order === null ? <div className="mt-6"><EmptyState title="ไม่พบคำสั่งซื้อ" message="ตรวจสอบเลขคำสั่งซื้อและเบอร์โทร 4 ตัวท้ายอีกครั้ง" /></div> : null}
         {order ? (
-          <section className="mx-auto mt-6 grid max-w-5xl gap-6 lg:grid-cols-[1fr_360px]">
+          <section className="mt-6 grid w-full gap-6 lg:grid-cols-[minmax(0,1fr)_400px]">
             <div className="rounded-bloom border border-pink-100 bg-white p-5 shadow-sm">
               <p className="text-sm text-zinc-500">เลขคำสั่งซื้อ</p>
               <h2 className="text-2xl font-bold">{order.orderNumber}</h2>

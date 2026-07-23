@@ -6,7 +6,7 @@ import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { OrderableItemCard } from "@/components/OrderableItemCard";
 import { ADMIN_PRODUCTS_KEY, fetchPublicProducts, readAdminItems, saveAdminItems, type AdminProduct } from "@/lib/admin-data";
-import { getFavoriteProductIds, listenForFavoriteUpdates, toggleFavoriteProduct } from "@/lib/favorites";
+import { getFavoriteProductIds, listenForFavoriteUpdates, syncFavoritesWithSupabase, toggleFavoriteProduct } from "@/lib/favorites";
 import { saveQuickOrder } from "@/lib/quick-order";
 
 type HomeProductCard = {
@@ -33,6 +33,7 @@ export function HomeProductTypesSection() {
       })
       .catch(() => setAdminProducts(localProducts));
     setFavoriteIds(getFavoriteProductIds());
+    syncFavoritesWithSupabase().then((favorites) => setFavoriteIds(favorites.productIds)).catch(() => undefined);
   }, []);
 
   useEffect(() => {

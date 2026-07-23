@@ -1,12 +1,20 @@
 create schema if not exists extensions;
 create extension if not exists "pgcrypto" with schema extensions;
 
+-- Legacy tables that are not read or written by the current app.
+drop table if exists public.product_materials cascade;
+drop table if exists public.order_status_history cascade;
+drop table if exists public.order_progress_images cascade;
+drop table if exists public.production_capacity cascade;
+drop table if exists public.blocked_dates cascade;
+
 create table if not exists public.profiles (
   id uuid primary key references auth.users(id) on delete cascade,
   display_name text,
   first_name text,
   last_name text,
   phone text,
+  line_id text,
   address text,
   role text not null default 'customer' check (role in ('customer', 'admin')),
   created_at timestamptz not null default now(),
@@ -56,6 +64,12 @@ create table if not exists public.configurator_product_types (
   production_score int not null default 1,
   production_days int not null default 1,
   image_tone text not null default '#FCE4EC',
+  image_url text,
+  image_path text,
+  image_width int,
+  image_height int,
+  image_format text,
+  image_size int,
   sort_order int not null default 0,
   is_active boolean not null default true,
   created_at timestamptz not null default now(),
@@ -149,12 +163,14 @@ create table if not exists public.materials (
   updated_at timestamptz not null default now()
 );
 
-create table if not exists public.product_materials (
+create table if not exists public.design_option_materials (
   id uuid primary key default gen_random_uuid(),
-  product_id uuid not null references public.products(id) on delete cascade,
+  option_type text not null check (option_type in ('product_type', 'flower_type', 'color', 'stem', 'wrapping', 'ribbon', 'decoration')),
+  option_id text not null,
   material_id uuid not null references public.materials(id) on delete cascade,
-  quantity_per_unit numeric(12,2) not null,
-  unique (product_id, material_id)
+  quantity_per_unit numeric(12,2) not null default 1,
+  created_at timestamptz not null default now(),
+  unique (option_type, option_id, material_id)
 );
 
 create table if not exists public.orders (
@@ -198,15 +214,6 @@ create table if not exists public.order_items (
   line_total numeric(10,2) not null
 );
 
-create table if not exists public.order_status_history (
-  id uuid primary key default gen_random_uuid(),
-  order_id uuid not null references public.orders(id) on delete cascade,
-  status text not null,
-  note text,
-  changed_by uuid references auth.users(id),
-  created_at timestamptz not null default now()
-);
-
 create table if not exists public.payment_records (
   id uuid primary key default gen_random_uuid(),
   order_id uuid not null references public.orders(id) on delete cascade,
@@ -243,21 +250,6 @@ alter table public.payment_records
   add column if not exists receiver_matched boolean,
   add column if not exists metadata jsonb not null default '{}'::jsonb;
 
-create table if not exists public.production_capacity (
-  id uuid primary key default gen_random_uuid(),
-  capacity_date date not null unique,
-  max_orders int not null default 5,
-  max_production_score int not null default 12,
-  note text
-);
-
-create table if not exists public.blocked_dates (
-  id uuid primary key default gen_random_uuid(),
-  blocked_date date not null unique,
-  reason text,
-  created_at timestamptz not null default now()
-);
-
 create table if not exists public.gallery_items (
   id uuid primary key default gen_random_uuid(),
   title text not null,
@@ -281,13 +273,13 @@ create table if not exists public.gallery_items (
   updated_at timestamptz not null default now()
 );
 
-create table if not exists public.order_progress_images (
+create table if not exists public.customer_favorites (
   id uuid primary key default gen_random_uuid(),
-  order_id uuid not null references public.orders(id) on delete cascade,
-  image_url text not null,
-  caption text,
-  uploaded_by uuid references auth.users(id),
-  created_at timestamptz not null default now()
+  user_id uuid not null references auth.users(id) on delete cascade,
+  item_type text not null check (item_type in ('gallery', 'product')),
+  item_id text not null,
+  created_at timestamptz not null default now(),
+  unique (user_id, item_type, item_id)
 );
 
 create table if not exists public.data_deletion_requests (
@@ -308,6 +300,7 @@ create table if not exists public.data_deletion_requests (
 alter table public.profiles add column if not exists first_name text;
 alter table public.profiles add column if not exists last_name text;
 alter table public.profiles add column if not exists phone text;
+alter table public.profiles add column if not exists line_id text;
 alter table public.profiles add column if not exists address text;
 alter table public.profiles add column if not exists updated_at timestamptz not null default now();
 alter table public.products add column if not exists image_tone text not null default '#FCE4EC';
@@ -325,6 +318,12 @@ alter table public.configurator_product_types add column if not exists base_quan
 alter table public.configurator_product_types add column if not exists production_score int not null default 1;
 alter table public.configurator_product_types add column if not exists production_days int not null default 1;
 alter table public.configurator_product_types add column if not exists image_tone text not null default '#FCE4EC';
+alter table public.configurator_product_types add column if not exists image_url text;
+alter table public.configurator_product_types add column if not exists image_path text;
+alter table public.configurator_product_types add column if not exists image_width int;
+alter table public.configurator_product_types add column if not exists image_height int;
+alter table public.configurator_product_types add column if not exists image_format text;
+alter table public.configurator_product_types add column if not exists image_size int;
 alter table public.configurator_product_types add column if not exists sort_order int not null default 0;
 alter table public.configurator_product_types add column if not exists is_active boolean not null default true;
 alter table public.configurator_product_types add column if not exists updated_at timestamptz not null default now();
@@ -386,6 +385,8 @@ create index if not exists idx_wrapping_options_active on public.wrapping_option
 create index if not exists idx_ribbon_options_active on public.ribbon_options (is_active);
 create index if not exists idx_decoration_options_active on public.decoration_options (is_active);
 create index if not exists idx_materials_status on public.materials (status);
+create index if not exists idx_design_option_materials_option on public.design_option_materials (option_type, option_id);
+create index if not exists idx_design_option_materials_material on public.design_option_materials (material_id);
 create index if not exists idx_orders_order_number on public.orders (order_number);
 create index if not exists idx_orders_auth_user_id on public.orders (auth_user_id);
 create index if not exists idx_orders_phone on public.orders (phone);
@@ -393,12 +394,10 @@ create index if not exists idx_orders_pickup_date on public.orders (pickup_date)
 create index if not exists idx_orders_status on public.orders (order_status);
 create index if not exists idx_orders_payment_status on public.orders (payment_status);
 create index if not exists idx_order_items_order_id on public.order_items (order_id);
-create index if not exists idx_order_status_history_order_id on public.order_status_history (order_id);
 create index if not exists idx_payment_records_order_id on public.payment_records (order_id);
-create index if not exists idx_production_capacity_date on public.production_capacity (capacity_date);
-create index if not exists idx_blocked_dates_date on public.blocked_dates (blocked_date);
 create index if not exists idx_gallery_items_public on public.gallery_items (is_public);
-create index if not exists idx_order_progress_images_order_id on public.order_progress_images (order_id);
+create index if not exists idx_customer_favorites_user_id on public.customer_favorites (user_id);
+create index if not exists idx_customer_favorites_lookup on public.customer_favorites (item_type, item_id);
 create index if not exists idx_data_deletion_requests_user_id on public.data_deletion_requests (user_id);
 create index if not exists idx_data_deletion_requests_email on public.data_deletion_requests (email);
 create index if not exists idx_data_deletion_requests_status on public.data_deletion_requests (status);
@@ -415,15 +414,12 @@ alter table public.ribbon_options enable row level security;
 alter table public.decoration_options enable row level security;
 alter table public.site_settings enable row level security;
 alter table public.materials enable row level security;
-alter table public.product_materials enable row level security;
+alter table public.design_option_materials enable row level security;
 alter table public.orders enable row level security;
 alter table public.order_items enable row level security;
-alter table public.order_status_history enable row level security;
 alter table public.payment_records enable row level security;
-alter table public.production_capacity enable row level security;
-alter table public.blocked_dates enable row level security;
 alter table public.gallery_items enable row level security;
-alter table public.order_progress_images enable row level security;
+alter table public.customer_favorites enable row level security;
 alter table public.data_deletion_requests enable row level security;
 
 create or replace function public.is_admin()
@@ -545,8 +541,6 @@ drop policy if exists "Public ribbon read" on public.ribbon_options;
 drop policy if exists "Public decoration read" on public.decoration_options;
 drop policy if exists "Public site settings read" on public.site_settings;
 drop policy if exists "Public gallery read" on public.gallery_items;
-drop policy if exists "Public capacity read" on public.production_capacity;
-drop policy if exists "Public blocked dates read" on public.blocked_dates;
 drop policy if exists "Guest can create orders" on public.orders;
 drop policy if exists "Guest can create order items" on public.order_items;
 drop policy if exists "Customer token can read order" on public.orders;
@@ -555,9 +549,9 @@ drop policy if exists "Users can read own order items" on public.order_items;
 drop policy if exists "Users can read own payments" on public.payment_records;
 drop policy if exists "Admin full access orders" on public.orders;
 drop policy if exists "Admin full access order items" on public.order_items;
-drop policy if exists "Admin full access status history" on public.order_status_history;
 drop policy if exists "Admin full access payments" on public.payment_records;
 drop policy if exists "Admin full access materials" on public.materials;
+drop policy if exists "Admin full access design option materials" on public.design_option_materials;
 drop policy if exists "Admin full access products" on public.products;
 drop policy if exists "Admin full access configurator product types" on public.configurator_product_types;
 drop policy if exists "Admin full access flowers" on public.flower_types;
@@ -567,11 +561,11 @@ drop policy if exists "Admin full access wrapping" on public.wrapping_options;
 drop policy if exists "Admin full access ribbons" on public.ribbon_options;
 drop policy if exists "Admin full access decorations" on public.decoration_options;
 drop policy if exists "Admin full access site settings" on public.site_settings;
-drop policy if exists "Admin full access product materials" on public.product_materials;
 drop policy if exists "Admin full access gallery" on public.gallery_items;
-drop policy if exists "Admin full access progress images" on public.order_progress_images;
-drop policy if exists "Admin full access capacity" on public.production_capacity;
-drop policy if exists "Admin full access blocked dates" on public.blocked_dates;
+drop policy if exists "Users can read own favorites" on public.customer_favorites;
+drop policy if exists "Users can create own favorites" on public.customer_favorites;
+drop policy if exists "Users can delete own favorites" on public.customer_favorites;
+drop policy if exists "Admin full access customer favorites" on public.customer_favorites;
 drop policy if exists "Users can create own data deletion requests" on public.data_deletion_requests;
 drop policy if exists "Users can read own data deletion requests" on public.data_deletion_requests;
 drop policy if exists "Admin full access data deletion requests" on public.data_deletion_requests;
@@ -587,8 +581,6 @@ create policy "Public ribbon read" on public.ribbon_options for select using (is
 create policy "Public decoration read" on public.decoration_options for select using (is_active);
 create policy "Public site settings read" on public.site_settings for select using (true);
 create policy "Public gallery read" on public.gallery_items for select using (is_public);
-create policy "Public capacity read" on public.production_capacity for select using (true);
-create policy "Public blocked dates read" on public.blocked_dates for select using (true);
 
 create policy "Guest can create orders" on public.orders for insert with check (true);
 create policy "Guest can create order items" on public.order_items for insert with check (true);
@@ -612,9 +604,9 @@ create policy "Users can read own payments" on public.payment_records for select
 );
 create policy "Admin full access orders" on public.orders for all using (public.is_admin()) with check (public.is_admin());
 create policy "Admin full access order items" on public.order_items for all using (public.is_admin()) with check (public.is_admin());
-create policy "Admin full access status history" on public.order_status_history for all using (public.is_admin()) with check (public.is_admin());
 create policy "Admin full access payments" on public.payment_records for all using (public.is_admin()) with check (public.is_admin());
 create policy "Admin full access materials" on public.materials for all using (public.is_admin()) with check (public.is_admin());
+create policy "Admin full access design option materials" on public.design_option_materials for all using (public.is_admin()) with check (public.is_admin());
 create policy "Admin full access products" on public.products for all using (public.is_admin()) with check (public.is_admin());
 create policy "Admin full access configurator product types" on public.configurator_product_types for all using (public.is_admin()) with check (public.is_admin());
 create policy "Admin full access flowers" on public.flower_types for all using (public.is_admin()) with check (public.is_admin());
@@ -624,11 +616,11 @@ create policy "Admin full access wrapping" on public.wrapping_options for all us
 create policy "Admin full access ribbons" on public.ribbon_options for all using (public.is_admin()) with check (public.is_admin());
 create policy "Admin full access decorations" on public.decoration_options for all using (public.is_admin()) with check (public.is_admin());
 create policy "Admin full access site settings" on public.site_settings for all using (public.is_admin()) with check (public.is_admin());
-create policy "Admin full access product materials" on public.product_materials for all using (public.is_admin()) with check (public.is_admin());
 create policy "Admin full access gallery" on public.gallery_items for all using (public.is_admin()) with check (public.is_admin());
-create policy "Admin full access progress images" on public.order_progress_images for all using (public.is_admin()) with check (public.is_admin());
-create policy "Admin full access capacity" on public.production_capacity for all using (public.is_admin()) with check (public.is_admin());
-create policy "Admin full access blocked dates" on public.blocked_dates for all using (public.is_admin()) with check (public.is_admin());
+create policy "Users can read own favorites" on public.customer_favorites for select using (auth.uid() = user_id);
+create policy "Users can create own favorites" on public.customer_favorites for insert with check (auth.uid() = user_id);
+create policy "Users can delete own favorites" on public.customer_favorites for delete using (auth.uid() = user_id);
+create policy "Admin full access customer favorites" on public.customer_favorites for all using (public.is_admin()) with check (public.is_admin());
 create policy "Users can create own data deletion requests" on public.data_deletion_requests for insert with check (auth.uid() = user_id);
 create policy "Users can read own data deletion requests" on public.data_deletion_requests for select using (auth.uid() = user_id);
 create policy "Admin full access data deletion requests" on public.data_deletion_requests for all using (public.is_admin()) with check (public.is_admin());

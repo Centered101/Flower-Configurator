@@ -259,15 +259,38 @@ function CheckoutForm() {
       setAuthUserId(user.id);
       setAuthAccessToken(token);
       const metadata = user.user_metadata ?? {};
-      const firstName = typeof metadata.first_name === "string" ? metadata.first_name.trim() : "";
-      const lastName = typeof metadata.last_name === "string" ? metadata.last_name.trim() : "";
-      const displayName = typeof metadata.display_name === "string" ? metadata.display_name.trim() : "";
-      const customerName = [firstName, lastName].filter(Boolean).join(" ") || displayName;
-      const phone = typeof metadata.phone === "string" ? metadata.phone.trim() : "";
-      const lineId = typeof metadata.line_id === "string" ? metadata.line_id.trim() :
+      let firstName = typeof metadata.first_name === "string" ? metadata.first_name.trim() : "";
+      let lastName = typeof metadata.last_name === "string" ? metadata.last_name.trim() : "";
+      let displayName = typeof metadata.display_name === "string" ? metadata.display_name.trim() : "";
+      let phone = typeof metadata.phone === "string" ? metadata.phone.trim() : "";
+      let lineId = typeof metadata.line_id === "string" ? metadata.line_id.trim() :
         typeof metadata.lineId === "string" ? metadata.lineId.trim() :
         "";
-      const address = typeof metadata.address === "string" ? metadata.address.trim() : "";
+      let address = typeof metadata.address === "string" ? metadata.address.trim() : "";
+
+      try {
+        const response = await fetch("/api/profile", { cache: "no-store" });
+        if (response.ok) {
+          const profile = await response.json() as {
+            displayName?: string;
+            firstName?: string;
+            lastName?: string;
+            phone?: string;
+            lineId?: string;
+            address?: string;
+          };
+          firstName = profile.firstName?.trim() || firstName;
+          lastName = profile.lastName?.trim() || lastName;
+          displayName = profile.displayName?.trim() || displayName;
+          phone = profile.phone?.trim() || phone;
+          lineId = profile.lineId?.trim() || lineId;
+          address = profile.address?.trim() || address;
+        }
+      } catch {
+        // Metadata fallback is enough to keep checkout usable.
+      }
+
+      const customerName = [firstName, lastName].filter(Boolean).join(" ") || displayName;
 
       if (customerName) {
         setValue("customerName", customerName, { shouldValidate: true });

@@ -24,9 +24,14 @@ function isMissingSchemaColumn(error: { message?: string } | null | undefined, c
   return message.includes(column) && message.includes("schema cache");
 }
 
+function isMissingOptionalSchema(error: { message?: string } | null | undefined) {
+  const message = (error?.message ?? "").toLowerCase();
+  return message.includes("schema cache") || message.includes("does not exist") || message.includes("could not find");
+}
+
 export async function GET() {
   const supabase = createSupabaseAdminClient();
-  const [productTypes, flowers, colors, stems, wrapping, ribbons, decorations, settings] = await Promise.all([
+  const [productTypes, flowers, colors, stems, wrapping, ribbons, decorations, materials, materialLinks, settings] = await Promise.all([
     supabase.from("configurator_product_types").select("*").order("sort_order", { ascending: true }),
     supabase.from("flower_types").select("*").order("sort_order", { ascending: true }),
     supabase.from("colors").select("*").order("sort_order", { ascending: true }),
@@ -34,12 +39,19 @@ export async function GET() {
     supabase.from("wrapping_options").select("*").order("sort_order", { ascending: true }),
     supabase.from("ribbon_options").select("*").order("sort_order", { ascending: true }),
     supabase.from("decoration_options").select("*").order("sort_order", { ascending: true }),
+    supabase.from("materials").select("id, name, color, quantity, unit, alert_threshold, status").neq("status", "deleted").order("name", { ascending: true }),
+    supabase.from("design_option_materials").select("id, option_type, option_id, material_id, quantity_per_unit"),
     supabase.from("site_settings").select("value").eq("key", "configurator_review_note").maybeSingle()
   ]);
 
   const error = productTypes.error ?? flowers.error ?? colors.error ?? stems.error ?? wrapping.error ?? ribbons.error ?? decorations.error ?? settings.error;
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  if ((materials.error && !isMissingOptionalSchema(materials.error)) || (materialLinks.error && !isMissingOptionalSchema(materialLinks.error))) {
+    const optionalError = materials.error ?? materialLinks.error;
+    return NextResponse.json({ error: optionalError?.message ?? "โหลดข้อมูลวัสดุไม่สำเร็จ" }, { status: 500 });
   }
 
   const stemGroups: ConfiguratorCatalog["stems"] = {
@@ -77,7 +89,15 @@ export async function GET() {
       baseQuantity: Number(item.base_quantity ?? 1),
       productionScore: Number(item.production_score ?? 1),
       productionDays: Number(item.production_days ?? 1),
-      imageTone: item.image_tone ?? "#FCE4EC"
+      imageTone: item.image_tone ?? "#FCE4EC",
+      image: item.image_url ? {
+        url: item.image_url,
+        path: item.image_path ?? "",
+        width: Number(item.image_width ?? 0),
+        height: Number(item.image_height ?? 0),
+        format: item.image_format === "avif" ? "avif" : "webp",
+        size: Number(item.image_size ?? 0)
+      } : undefined
     })),
     flowerTypes: (flowers.data ?? []).map((item) => ({
       id: item.slug,
@@ -116,6 +136,21 @@ export async function GET() {
       description: item.description ?? "",
       price: Number(item.price_delta ?? 0)
     }))),
+    materials: (materials.error ? [] : materials.data ?? []).map((item) => ({
+      id: item.id,
+      name: item.name,
+      color: item.color ?? "",
+      stock: Number(item.quantity ?? 0),
+      unit: item.unit ?? "ชิ้น",
+      alertAt: Number(item.alert_threshold ?? 0)
+    })),
+    materialLinks: (materialLinks.error ? [] : materialLinks.data ?? []).map((item) => ({
+      id: item.id,
+      optionType: item.option_type,
+      optionId: item.option_id,
+      materialId: item.material_id,
+      quantityPerUnit: Number(item.quantity_per_unit ?? 1)
+    })),
     reviewNote: String(settings.data?.value ?? "ราคานี้เป็นราคาประมาณการ ร้านจะตรวจสอบและยืนยันอีกครั้งก่อนเริ่มผลิต")
   };
 
@@ -135,6 +170,12 @@ export async function PUT(request: Request) {
     production_score: item.productionScore,
     production_days: item.productionDays,
     image_tone: item.imageTone,
+    image_url: item.image?.url ?? null,
+    image_path: item.image?.path ?? null,
+    image_width: item.image?.width ?? null,
+    image_height: item.image?.height ?? null,
+    image_format: item.image?.format ?? null,
+    image_size: item.image?.size ?? null,
     is_active: true,
     sort_order: index
   }));
@@ -142,9 +183,22 @@ export async function PUT(request: Request) {
   let productTypeUpsertError: { message: string } | null = null;
   if (productTypes.length) {
     const productUpsert = await supabase.from("configurator_product_types").upsert(productTypes, { onConflict: "slug" });
-    productTypeUpsertError = isMissingSchemaColumn(productUpsert.error, "image_tone")
-      ? (await supabase.from("configurator_product_types").upsert(productTypes.map(({ image_tone: _imageTone, ...item }) => item), { onConflict: "slug" })).error
-      : productUpsert.error;
+    productTypeUpsertError = productUpsert.error;
+
+    if (isMissingSchemaColumn(productUpsert.error, "image_url") && catalog.productTypes.some((item) => item.image?.url)) {
+      productTypeUpsertError = { message: "ฐานข้อมูลยังไม่มีคอลัมน์รูปตัวอย่างของประเภทสินค้า กรุณารัน supabase/schema.sql ก่อนบันทึกรูป" };
+    } else if (isMissingSchemaColumn(productUpsert.error, "image_url") || isMissingSchemaColumn(productUpsert.error, "image_tone")) {
+      productTypeUpsertError = (await supabase.from("configurator_product_types").upsert(productTypes.map(({
+        image_tone: _imageTone,
+        image_url: _imageUrl,
+        image_path: _imagePath,
+        image_width: _imageWidth,
+        image_height: _imageHeight,
+        image_format: _imageFormat,
+        image_size: _imageSize,
+        ...item
+      }) => item), { onConflict: "slug" })).error;
+    }
   }
 
   const stems = [

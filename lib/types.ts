@@ -15,12 +15,22 @@ export type CatalogOption = {
   price: number;
 };
 
+export type CatalogImage = {
+  url: string;
+  path: string;
+  width: number;
+  height: number;
+  format: "webp" | "avif";
+  size: number;
+};
+
 export type ProductType = Omit<CatalogOption, "id"> & {
   id: ProductTypeId;
   baseQuantity: number;
   productionScore: number;
   productionDays: number;
   imageTone: string;
+  image?: CatalogImage;
 };
 
 export type FlowerType = Omit<CatalogOption, "id"> & {
