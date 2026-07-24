@@ -11,6 +11,7 @@ import { CapacityCalendar } from "@/components/CapacityCalendar";
 import { Footer } from "@/components/Footer";
 import { HelpTooltip } from "@/components/HelpTooltip";
 import { Navbar } from "@/components/Navbar";
+import { LoginForm } from "@/components/LoginForm";
 import { ConfiguratorProvider, useConfigurator } from "@/components/configurator/ConfiguratorProvider";
 import { PriceSummary } from "@/components/configurator/PriceSummary";
 import { ImageUploader } from "@/components/ImageUploader";
@@ -82,6 +83,11 @@ function getIsoDateAfterDays(days: number) {
   return date.toISOString().slice(0, 10);
 }
 
+function getCurrentCheckoutPath() {
+  if (typeof window === "undefined") return "/checkout";
+  return `${window.location.pathname}${window.location.search}`;
+}
+
 function CheckoutForm() {
   const router = useRouter();
   const { config, catalog, isReady } = useConfigurator();
@@ -92,6 +98,8 @@ function CheckoutForm() {
   const [authUserId, setAuthUserId] = useState<string>();
   const [authAccessToken, setAuthAccessToken] = useState("");
   const [authChecked, setAuthChecked] = useState(false);
+  const [needsLogin, setNeedsLogin] = useState(false);
+  const [authRefreshKey, setAuthRefreshKey] = useState(0);
   const [profileAddress, setProfileAddress] = useState("");
   const [fulfillmentSettings, setFulfillmentSettings] = useState<FulfillmentSettings | null>(null);
   const [fulfillmentChecked, setFulfillmentChecked] = useState(false);
@@ -222,17 +230,17 @@ function CheckoutForm() {
     let isMounted = true;
     let supabase: ReturnType<typeof createSupabaseBrowserClient>;
 
-    function redirectToLogin() {
-      const redirectTo = `${window.location.pathname}${window.location.search}`;
-      const loginUrl = new URL("/login", window.location.origin);
-      loginUrl.searchParams.set("redirect", redirectTo);
-      router.replace(`${loginUrl.pathname}${loginUrl.search}`);
+    function requireCheckoutLogin() {
+      setAuthUserId(undefined);
+      setAuthAccessToken("");
+      setNeedsLogin(true);
+      setAuthChecked(true);
     }
 
     try {
       supabase = createSupabaseBrowserClient();
     } catch {
-      redirectToLogin();
+      requireCheckoutLogin();
       return () => {
         isMounted = false;
       };
@@ -243,7 +251,7 @@ function CheckoutForm() {
 
       const token = sessionData.session?.access_token;
       if (!token) {
-        redirectToLogin();
+        requireCheckoutLogin();
         return;
       }
 
@@ -252,10 +260,11 @@ function CheckoutForm() {
 
       const user = data.user;
       if (!user) {
-        redirectToLogin();
+        requireCheckoutLogin();
         return;
       }
 
+      setNeedsLogin(false);
       setAuthUserId(user.id);
       setAuthAccessToken(token);
       const metadata = user.user_metadata ?? {};
@@ -310,20 +319,19 @@ function CheckoutForm() {
       setAuthChecked(true);
     }).catch(() => {
       if (!isMounted) return;
-      redirectToLogin();
+      requireCheckoutLogin();
     });
 
     return () => {
       isMounted = false;
     };
-  }, [getValues, router, setValue]);
+  }, [authRefreshKey, setValue]);
 
   async function onSubmit(values: CheckoutInput) {
     if (!authUserId || !authAccessToken) {
-      const redirectTo = `${window.location.pathname}${window.location.search}`;
-      const loginUrl = new URL("/login", window.location.origin);
-      loginUrl.searchParams.set("redirect", redirectTo);
-      router.replace(`${loginUrl.pathname}${loginUrl.search}`);
+      setNeedsLogin(true);
+      setAuthChecked(true);
+      toast.warning("กรุณาเข้าสู่ระบบก่อนยืนยันคำสั่งซื้อ");
       return;
     }
 
@@ -354,23 +362,17 @@ function CheckoutForm() {
       return;
     }
 
+    if (data?.lineNotification?.ok === false && typeof data.lineNotification.error === "string") {
+      toast.warning(`บันทึกคำสั่งซื้อแล้ว แต่ LINE ยังไม่แจ้งเตือน: ${data.lineNotification.error}`);
+    }
+
     saveOrder(order);
     if (sourceItem) clearQuickOrder();
-
-    fetch("/api/orders/line-notify", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify(order)
-    }).catch((error) => {
-      console.error("ส่งแจ้งเตือน LINE ไม่สำเร็จ", error);
-    });
 
     router.push("/order/success");
   }
 
-  if (!isReady || !sourceChecked || !authChecked || !fulfillmentChecked) {
+  if (!isReady || !sourceChecked || !fulfillmentChecked || (!authChecked && !needsLogin)) {
     return (
       <>
         <Navbar />
@@ -404,6 +406,36 @@ function CheckoutForm() {
               </Link>
             </div>
           </section>
+        </main>
+        <Footer />
+      </>
+    );
+  }
+
+  if (needsLogin) {
+    return (
+      <>
+        <Navbar />
+        <main className="container-page grid min-h-screen gap-6 py-8 lg:grid-cols-[1fr_360px]">
+          <section className="rounded-bloom border border-pink-100 bg-white p-5 shadow-sm">
+            <div className="mb-6 rounded-bloom border border-pink-100 bg-blush/70 p-4">
+              <p className="text-sm font-semibold text-blossom">เข้าสู่ระบบก่อนสั่งซื้อ</p>
+              <h1 className="mt-1 text-2xl font-bold text-ink">ใช้บัญชีลูกค้าเพื่อยืนยันคำสั่งซื้อ</h1>
+              <p className="mt-2 text-sm leading-6 text-zinc-600">
+                ระบบจะใช้บัญชีนี้เก็บประวัติคำสั่งซื้อ ข้อมูลติดต่อ การชำระเงิน และการติดตามสถานะ
+              </p>
+            </div>
+            <LoginForm
+              redirectTo={getCurrentCheckoutPath()}
+              showBackLink={false}
+              onSignedIn={() => {
+                setNeedsLogin(false);
+                setAuthChecked(false);
+                setAuthRefreshKey((current) => current + 1);
+              }}
+            />
+          </section>
+          {sourceItem ? <QuickOrderSummary item={sourceItem} /> : <PriceSummary />}
         </main>
         <Footer />
       </>

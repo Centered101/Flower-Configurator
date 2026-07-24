@@ -1,9 +1,11 @@
 "use client";
 
+import Image from "next/image";
 import { useEffect, useRef, useState, type PointerEvent } from "react";
 import { ArrowDown, ArrowUp, Pipette, RotateCcw, Save } from "lucide-react";
 import { toast } from "sonner";
 import { HelpTooltip } from "@/components/HelpTooltip";
+import { ImageUploader } from "@/components/ImageUploader";
 import {
   fetchAdminMaterials,
   fetchOptionMaterialLinksState,
@@ -359,6 +361,12 @@ export function AdminConfiguratorManager() {
                   <Field label="จำนวนดอก/ก้าน" help="จำนวนดอกหรือก้านเริ่มต้นเมื่อเลือกประเภทนี้" type="number" value={item.baseQuantity} onChange={(value) => updateList("productTypes", index, { baseQuantity: toNumber(value) })} />
                   <Field label="วันผลิต" help="จำนวนวันผลิตโดยประมาณที่แสดงให้ลูกค้าเห็น" type="number" value={item.productionDays} onChange={(value) => updateList("productTypes", index, { productionDays: toNumber(value) })} />
                 </div>
+                <ProductTypeImageEditor
+                  image={item.image}
+                  title={item.name || `ประเภทสินค้า ${index + 1}`}
+                  onUploaded={(image) => updateList("productTypes", index, { image })}
+                  onRemove={() => updateList("productTypes", index, { image: undefined })}
+                />
                 <MaterialUsageEditor
                   optionType="product_type"
                   optionId={item.id}
@@ -503,6 +511,54 @@ export function AdminConfiguratorManager() {
         </button>
       </div>
     </fieldset>
+  );
+}
+
+function ProductTypeImageEditor({
+  image,
+  title,
+  onUploaded,
+  onRemove
+}: {
+  image?: ConfiguratorCatalog["productTypes"][number]["image"];
+  title: string;
+  onUploaded: (image: NonNullable<ConfiguratorCatalog["productTypes"][number]["image"]>) => void;
+  onRemove: () => void;
+}) {
+  return (
+    <div className="grid gap-3 rounded-soft border border-pink-100 bg-blush/35 p-3 lg:grid-cols-[220px_1fr]">
+      <div>
+        <div className="mb-2 flex items-center justify-between gap-2">
+          <p className="text-sm font-bold text-ink">รูปที่ใช้อยู่</p>
+          {image ? (
+            <button type="button" onClick={onRemove} className="rounded-full border border-pink-200 bg-white px-3 py-1 text-xs font-bold text-ink hover:bg-blush">
+              ลบรูป
+            </button>
+          ) : null}
+        </div>
+        <div className="relative grid h-36 place-items-center overflow-hidden rounded-soft border border-pink-100 bg-white text-center text-xs font-semibold text-zinc-500">
+          {image ? (
+            <Image
+              src={image.url}
+              alt={title}
+              fill
+              sizes="220px"
+              draggable={false}
+              onContextMenu={(event) => event.preventDefault()}
+              className="select-none object-cover"
+            />
+          ) : (
+            <span className="px-4">ยังไม่มีรูปตัวอย่าง</span>
+          )}
+        </div>
+        {image ? (
+          <p className="mt-2 text-xs font-semibold text-zinc-500">
+            {image.width} x {image.height}px / {image.format}
+          </p>
+        ) : null}
+      </div>
+      <ImageUploader bucket="gallery-images" folder="product-types" onUploaded={onUploaded} />
+    </div>
   );
 }
 

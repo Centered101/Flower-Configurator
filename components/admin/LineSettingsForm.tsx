@@ -74,13 +74,13 @@ export function LineSettingsForm() {
       const response = await fetch("/api/admin/line-test", {
         method: "POST"
       });
-      const data = await response.json();
+      const data = await response.json() as { ok?: boolean; error?: string };
 
-      if (!response.ok) {
+      if (!response.ok || data.ok === false) {
         throw new Error(data.error ?? "ทดสอบส่ง LINE ไม่สำเร็จ");
       }
 
-      toast.success("ส่งข้อความทดสอบเข้ากลุ่ม LINE แล้ว");
+      toast.success("ส่งข้อความทดสอบไปยังผู้รับ LINE แล้ว");
     } catch (testError) {
       const message = testError instanceof Error ? testError.message : "ทดสอบส่ง LINE ไม่สำเร็จ";
       setError(message);
@@ -98,14 +98,14 @@ export function LineSettingsForm() {
         </span>
         <div className="min-w-0">
           <div className="flex items-center gap-2">
-            <h2 className="text-lg font-bold text-ink">แจ้งเตือนร้านผ่านกลุ่ม LINE</h2>
+            <h2 className="text-lg font-bold text-ink">แจ้งเตือนร้านผ่าน LINE</h2>
             <HelpTooltip
               title="LINE แจ้งเตือน"
-              content="เมื่อมีคำสั่งซื้อใหม่ ระบบจะส่ง Flex Message เข้ากลุ่ม LINE ของร้าน โดยใช้ Channel access token และ Group ID ที่ตั้งค่าไว้"
+              content="ระบบส่งแจ้งเตือนหลักตอนลูกค้าอัปโหลดสลิป โดยรวมเลขออร์เดอร์ รายละเอียดสำคัญ และรูปสลิปไว้ใน Flex Message เดียวเพื่อลดโควต้า LINE"
             />
           </div>
           <p className="mt-1 text-sm leading-6 text-zinc-600">
-            เมื่อมีคำสั่งซื้อใหม่ ระบบจะส่งข้อความเข้ากลุ่ม LINE ของร้าน
+            ระบบจะส่งข้อความไปยังผู้รับ LINE ตอนลูกค้าอัปโหลดสลิปเป็นหลัก จะใช้ User ID, Group ID หรือ Room ID ก็ได้
           </p>
         </div>
       </div>
@@ -114,7 +114,7 @@ export function LineSettingsForm() {
         <div className="block">
           <div className="mb-1 flex items-center gap-2 text-sm font-semibold text-ink">
             รหัสเชื่อมต่อ LINE
-            <HelpTooltip content="คือ LINE_CHANNEL_ACCESS_TOKEN จาก LINE Developers ใช้ส่งข้อความแทนร้าน ควรเก็บเป็นความลับ" />
+            <HelpTooltip content="ใช้ Channel access token จาก LINE Developers > Messaging API เท่านั้น โดยปกติเป็นรหัสยาว ๆ ใส่เฉพาะ token ไม่ต้องใส่คำว่า Bearer" />
           </div>
           <input
             suppressHydrationWarning
@@ -126,20 +126,20 @@ export function LineSettingsForm() {
             className="touch-target w-full rounded-soft border border-pink-100 px-3"
             autoComplete="off"
           />
-          <span className="mt-1 block text-xs text-zinc-500">ปล่อยว่างไว้ถ้าต้องการใช้รหัสเดิม</span>
+          <span className="mt-1 block text-xs text-zinc-500">ปล่อยว่างไว้ถ้าต้องการใช้รหัสเดิม ถ้าขึ้น 401 ให้สร้าง Channel access token ใหม่แล้วบันทึกทับ</span>
         </div>
 
         <div className="block">
           <div className="mb-1 flex items-center gap-2 text-sm font-semibold text-ink">
-            รหัสกลุ่ม LINE
-            <HelpTooltip content="คือ LINE_ADMIN_GROUP_ID ของกลุ่มที่ต้องการให้ร้านรับแจ้งเตือนคำสั่งซื้อ" />
+            รหัสผู้รับ LINE
+            <HelpTooltip content="ใส่ User ID ที่ขึ้นต้นด้วย U..., Group ID ที่ขึ้นต้นด้วย C... หรือ Room ID ที่ขึ้นต้นด้วย R... ผู้รับต้องเคยเพิ่มหรือคุยกับ LINE Bot แล้ว" />
           </div>
           <input
             suppressHydrationWarning
-            aria-label="รหัสกลุ่ม LINE"
+            aria-label="รหัสผู้รับ LINE"
             value={adminGroupId}
             onChange={(event) => setAdminGroupId(event.target.value)}
-            placeholder="เช่น Cxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+            placeholder="เช่น Uxxxxxxxx, Cxxxxxxxx หรือ Rxxxxxxxx"
             className="touch-target w-full rounded-soft border border-pink-100 px-3"
             autoComplete="off"
           />

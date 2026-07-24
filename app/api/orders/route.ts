@@ -97,7 +97,13 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: itemError.message }, { status: 500 });
     }
 
-    return NextResponse.json({ ok: true, orderId: order.id });
+    const lineNotification = {
+      ok: true,
+      skipped: true,
+      reason: "ลดการแจ้งเตือน LINE: ระบบจะส่งสรุปออร์เดอร์พร้อมสลิปเมื่อลูกค้าอัปโหลดสลิป"
+    };
+
+    return NextResponse.json({ ok: true, orderId: order.id, lineNotification });
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "บันทึกคำสั่งซื้อไม่สำเร็จ" },

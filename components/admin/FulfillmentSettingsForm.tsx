@@ -119,7 +119,13 @@ export function FulfillmentSettingsForm() {
             {settings.pickupTimeSlots.map((slot) => (
               <span key={slot} className="inline-flex items-center gap-2 rounded-full border border-pink-100 bg-white px-3 py-2 text-sm font-bold text-ink">
                 {slot}
-                <button type="button" onClick={() => removeTimeSlot(slot)} className="text-zinc-400 hover:text-red-600" aria-label={`ลบเวลา ${slot}`}>
+                <button
+                  type="button"
+                  suppressHydrationWarning
+                  onClick={() => removeTimeSlot(slot)}
+                  className="text-zinc-400 hover:text-red-600"
+                  aria-label={`ลบเวลา ${slot}`}
+                >
                   <Trash2 size={14} aria-hidden="true" />
                 </button>
               </span>
@@ -133,7 +139,12 @@ export function FulfillmentSettingsForm() {
               onChange={(event) => setNewTimeSlot(event.target.value)}
               className="touch-target rounded-soft border border-pink-100 bg-white px-3 font-bold text-ink"
             />
-            <button type="button" onClick={addTimeSlot} className="touch-target inline-flex items-center justify-center gap-2 rounded-soft border border-pink-200 bg-white px-4 py-2 font-bold text-ink hover:bg-blush">
+            <button
+              type="button"
+              suppressHydrationWarning
+              onClick={addTimeSlot}
+              className="touch-target inline-flex items-center justify-center gap-2 rounded-soft border border-pink-200 bg-white px-4 py-2 font-bold text-ink hover:bg-blush"
+            >
               <Plus size={17} />
               เพิ่มเวลา
             </button>

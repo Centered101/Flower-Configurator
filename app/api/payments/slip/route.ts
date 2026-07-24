@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { processAndStoreImage } from "@/lib/image-processing";
+import { createPaymentSlipDisplayUrl } from "@/lib/payment-slip-url";
 import { decodeSlipQrPayload, type SlipVerificationResult, verifySlipPayload } from "@/lib/slip-verification";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getUserFromRequest } from "@/lib/supabase/request-auth";
@@ -11,6 +12,9 @@ type OrderPaymentRow = {
   id: string;
   order_number: string;
   auth_user_id: string | null;
+  customer_name: string;
+  phone: string;
+  line_id: string | null;
   deposit_amount: number | string;
   payment_status: string;
 };
@@ -99,7 +103,7 @@ export async function POST(request: Request) {
     const supabase = createSupabaseAdminClient();
     const { data: order, error: orderError } = await supabase
       .from("orders")
-      .select("id, order_number, auth_user_id, deposit_amount, payment_status")
+      .select("id, order_number, auth_user_id, customer_name, phone, line_id, deposit_amount, payment_status")
       .eq("order_number", orderNumber)
       .maybeSingle();
 
@@ -138,6 +142,10 @@ export async function POST(request: Request) {
       bucket: "payment-slips",
       folder: `${normalizeStoragePart(user.id)}/${normalizeStoragePart(orderNumber)}`
     });
+    const slipDisplayUrl = await createPaymentSlipDisplayUrl({
+      slipPath: storedSlip.path,
+      fallbackUrl: storedSlip.url
+    });
     const paymentStatus = verification.status === "paid"
       ? "paid"
       : verification.status === "failed" ? "failed" : "awaiting_slip_review";
@@ -151,7 +159,7 @@ export async function POST(request: Request) {
       payment_method: "promptpay",
       amount: verification.parsedAmount ?? expectedAmount,
       payment_type: "deposit",
-      slip_url: storedSlip.url,
+      slip_url: slipDisplayUrl,
       slip_path: storedSlip.path,
       status: paymentRecordStatus,
       verification_message: verification.message,
@@ -183,16 +191,26 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: updateError.message }, { status: 500 });
     }
 
+    const lineNotification = {
+      ok: true,
+      skipped: true,
+      reason: "บันทึกสลิปแล้ว รอให้ลูกค้ากดส่งให้ร้านตรวจเพื่อลดการแจ้งเตือน LINE ซ้ำ"
+    };
+
     return NextResponse.json({
       ok: true,
       paymentStatus,
-      slip: storedSlip,
+      slip: {
+        ...storedSlip,
+        url: slipDisplayUrl
+      },
       verification: {
         status: paymentRecordStatus,
         message: verification.message,
         parsedAmount: verification.parsedAmount,
         receiverMatched: verification.receiverMatched
-      }
+      },
+      lineNotification
     });
   } catch (error) {
     return NextResponse.json(

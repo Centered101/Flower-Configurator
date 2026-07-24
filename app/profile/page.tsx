@@ -13,7 +13,7 @@ import { Footer } from "@/components/Footer";
 import { HelpTooltip } from "@/components/HelpTooltip";
 import { Navbar } from "@/components/Navbar";
 import { ADMIN_GALLERY_KEY, ADMIN_PRODUCTS_KEY, fetchPublicGalleryItems, fetchPublicProducts, readAdminItems, saveAdminItems, type AdminGalleryItem, type AdminProduct } from "@/lib/admin-data";
-import { formatThaiIsoDate } from "@/lib/date-format";
+import { formatThaiDateTime, formatThaiIsoDate } from "@/lib/date-format";
 import { clearAllFavorites, getFavoriteGalleryIds, getFavoriteProductIds, listenForFavoriteUpdates, syncFavoritesWithSupabase } from "@/lib/favorites";
 import { deleteOrdersForCustomer, getStoredOrders, listenForOrderUpdates, sortOrdersByOrderNumber } from "@/lib/orders";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
@@ -551,6 +551,12 @@ export default function CustomerProfilePage() {
                           <p>ยอดรวม: <span className="font-bold text-ink">{order.total} บาท</span></p>
                           <p>มัดจำ: <span className="font-bold text-ink">{order.depositAmount} บาท</span></p>
                           <p>ชำระเงิน: <span className="font-bold text-ink">{paymentStatusLabels[order.paymentStatus]}</span></p>
+                          {order.paymentSlip ? (
+                            <p className="sm:col-span-2">
+                              สลิป: <span className="font-bold text-ink">อัปโหลดแล้ว</span>
+                              {order.paymentSlip.uploadedAt ? ` เมื่อ ${formatThaiDateTime(order.paymentSlip.uploadedAt)}` : ""}
+                            </p>
+                          ) : null}
                         </div>
                       </article>
                     ))}

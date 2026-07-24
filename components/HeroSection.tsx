@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { ArrowRight, CalendarCheck, Paintbrush, PackageCheck, Sparkles } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import { ProductPreview } from "./configurator/ProductPreview";
+import { HeroPreviewStatic } from "@/components/HeroPreviewStatic";
 
 const orderSteps: [LucideIcon, string][] = [
   [Paintbrush, "เลือกรูปแบบ"],
@@ -39,9 +39,7 @@ export function HeroSection() {
           ))}
         </div>
       </div>
-      <div className="rounded-bloom border border-pink-100 bg-white p-4 shadow-soft" data-aos="zoom-in">
-        <ProductPreview compact sampleMode="random" />
-      </div>
+      <HeroPreviewStatic />
     </section>
   );
 }

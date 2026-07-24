@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { defaultConfig } from "@/lib/configurator";
 import { sortOrdersByOrderNumber } from "@/lib/orders";
+import { createPaymentSlipDisplayUrl } from "@/lib/payment-slip-url";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import type { ConfiguratorState, CustomerOrder, OrderStatus } from "@/lib/types";
@@ -78,9 +79,13 @@ function getSourceItem(item?: OrderItemRow) {
   return isRecord(json) && isRecord(json.sourceItem) ? json.sourceItem as CustomerOrder["sourceItem"] : undefined;
 }
 
-function mapOrder(row: OrderRow, item?: OrderItemRow, payment?: PaymentRow): CustomerOrder {
+async function mapOrder(row: OrderRow, item?: OrderItemRow, payment?: PaymentRow): Promise<CustomerOrder> {
   const total = toNumber(row.total);
   const depositAmount = toNumber(row.deposit_amount);
+  const slipUrl = payment ? await createPaymentSlipDisplayUrl({
+    slipPath: payment.slip_path,
+    fallbackUrl: payment.slip_url
+  }) : "";
 
   return {
     id: row.id,
@@ -107,9 +112,9 @@ function mapOrder(row: OrderRow, item?: OrderItemRow, payment?: PaymentRow): Cus
     orderStatus: row.order_status,
     config: getConfig(item),
     sourceItem: getSourceItem(item),
-    paymentSlip: payment?.slip_url ? {
-      url: payment.slip_url,
-      path: payment.slip_path ?? payment.slip_url,
+    paymentSlip: payment && (slipUrl || payment.slip_path) ? {
+      url: slipUrl,
+      path: payment.slip_path ?? payment.slip_url ?? "",
       amount: toNumber(payment.amount),
       parsedAmount: payment.verified_amount === null ? undefined : toNumber(payment.verified_amount),
       status: payment.status === "paid" ? "paid" : payment.status === "failed" ? "failed" : "awaiting_review",
@@ -185,7 +190,9 @@ export async function GET() {
       if (!paymentByOrderId.has(payment.order_id)) paymentByOrderId.set(payment.order_id, payment);
     }
 
-    return NextResponse.json(sortOrdersByOrderNumber(orders.map((order) => mapOrder(order, itemByOrderId.get(order.id), paymentByOrderId.get(order.id)))), {
+    const mappedOrders = await Promise.all(orders.map((order) => mapOrder(order, itemByOrderId.get(order.id), paymentByOrderId.get(order.id))));
+
+    return NextResponse.json(sortOrdersByOrderNumber(mappedOrders), {
       headers: { "Cache-Control": "no-store" }
     });
   } catch (error) {

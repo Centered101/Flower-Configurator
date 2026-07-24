@@ -7,9 +7,14 @@ import { HomeProductTypesSection } from "@/components/HomeProductTypesSection";
 import { Navbar } from "@/components/Navbar";
 import { nextAvailableDate } from "@/lib/capacity";
 import { formatThaiIsoDate } from "@/lib/date-format";
+import { fetchHomeGalleryItems, fetchHomeProducts } from "@/lib/public-home-data";
 
-export default function HomePage() {
+export default async function HomePage() {
   const nearestAvailableDate = nextAvailableDate(3);
+  const [products, galleryItems] = await Promise.all([
+    fetchHomeProducts(),
+    fetchHomeGalleryItems()
+  ]);
 
   return (
     <>
@@ -33,8 +38,8 @@ export default function HomePage() {
             <p className="text-2xl font-bold text-ink">ดูในแกลเลอรี</p>
           </div>
         </section>
-        <HomeProductTypesSection />
-        <HomeGallerySection />
+        <HomeProductTypesSection initialProducts={products} />
+        <HomeGallerySection initialItems={galleryItems} />
       </main>
       <Footer />
     </>

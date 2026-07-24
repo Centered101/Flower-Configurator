@@ -7,8 +7,22 @@ function getFirstEnvValue(...keys: string[]) {
   return "";
 }
 
+function normalizeSupabaseUrl(value: string) {
+  try {
+    const url = new URL(value);
+    if (url.protocol === "http:" && url.hostname.endsWith(".supabase.co")) {
+      url.protocol = "https:";
+      return url.toString().replace(/\/$/, "");
+    }
+  } catch {
+    return value;
+  }
+
+  return value.replace(/\/$/, "");
+}
+
 export function getSupabasePublicConfig() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim() || process.env.SUPABASE_URL?.trim() || "";
+  const url = normalizeSupabaseUrl(process.env.NEXT_PUBLIC_SUPABASE_URL?.trim() || process.env.SUPABASE_URL?.trim() || "");
   const publishableKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim() || process.env.SUPABASE_PUBLISHABLE_KEY?.trim() || "";
 
   if (!url || !publishableKey) {
@@ -19,7 +33,7 @@ export function getSupabasePublicConfig() {
 }
 
 export function getSupabaseAdminConfig() {
-  const url = getFirstEnvValue("SUPABASE_URL", "NEXT_PUBLIC_SUPABASE_URL");
+  const url = normalizeSupabaseUrl(getFirstEnvValue("SUPABASE_URL", "NEXT_PUBLIC_SUPABASE_URL"));
   const serviceKey = getFirstEnvValue("SUPABASE_SERVICE_ROLE_KEY", "SUPABASE_SECRET_KEY");
 
   if (!url || !serviceKey) {

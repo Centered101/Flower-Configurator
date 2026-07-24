@@ -28,3 +28,16 @@ export function formatThaiShortDate(value: string | Date) {
     month: "short"
   }).format(date);
 }
+
+export function formatThaiDateTime(value: string | Date) {
+  const date = typeof value === "string" ? new Date(value) : value;
+
+  return new Intl.DateTimeFormat(THAI_GREGORIAN_LOCALE, {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: "Asia/Bangkok"
+  }).format(date);
+}

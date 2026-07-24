@@ -1,5 +1,7 @@
 node_modules/
 .next/
+.next-check/
+.next-dev*.log
 out/
 dist/
 build/

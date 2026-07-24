@@ -5,24 +5,20 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { EmptyState } from "@/components/EmptyState";
 import { OrderableItemCard } from "@/components/OrderableItemCard";
-import { ADMIN_GALLERY_KEY, fetchPublicGalleryItems, readAdminItems, saveAdminItems, type AdminGalleryItem } from "@/lib/admin-data";
+import type { AdminGalleryItem } from "@/lib/admin-data";
 import { getFavoriteGalleryIds, listenForFavoriteUpdates, syncFavoritesWithSupabase, toggleFavoriteGalleryItem } from "@/lib/favorites";
 import { saveQuickOrder } from "@/lib/quick-order";
 
-export function HomeGallerySection() {
+export function HomeGallerySection({ initialItems = [] }: { initialItems?: AdminGalleryItem[] }) {
   const router = useRouter();
-  const [items, setItems] = useState<AdminGalleryItem[]>([]);
+  const [items, setItems] = useState<AdminGalleryItem[]>(initialItems);
   const [favoriteIds, setFavoriteIds] = useState<string[]>([]);
 
   useEffect(() => {
-    const localItems = readAdminItems<AdminGalleryItem>(ADMIN_GALLERY_KEY);
-    setItems(localItems);
-    fetchPublicGalleryItems()
-      .then((galleryItems) => {
-        setItems(galleryItems);
-        saveAdminItems(ADMIN_GALLERY_KEY, galleryItems);
-      })
-      .catch(() => setItems(localItems));
+    setItems(initialItems);
+  }, [initialItems]);
+
+  useEffect(() => {
     setFavoriteIds(getFavoriteGalleryIds());
     syncFavoritesWithSupabase().then((favorites) => setFavoriteIds(favorites.galleryIds)).catch(() => undefined);
   }, []);

@@ -1,6 +1,7 @@
 import type { CustomerOrder } from "@/lib/types";
 import { BRAND_NAME, SITE_URL } from "@/lib/brand";
 import { readLineSettings } from "@/lib/line-settings";
+import { createSlipLineImageUrl } from "@/lib/slip-line-image";
 
 const LINE_PUSH_ENDPOINT = "https://api.line.me/v2/bot/message/push";
 
@@ -11,6 +12,19 @@ type LineMessage = {
   type: "flex";
   altText: string;
   contents: Record<string, unknown>;
+};
+
+type SlipUploadedNotification = {
+  orderNumber: string;
+  customerName: string;
+  phone: string;
+  lineId?: string;
+  amount: number;
+  expectedAmount: number;
+  paymentStatus: "awaiting_review" | "paid" | "failed";
+  verificationMessage: string;
+  slipUrl?: string;
+  slipPath?: string;
 };
 
 function truncateText(value: string, maxLength = 260) {
@@ -53,6 +67,27 @@ function buildInfoRow(label: string, value: string | number) {
       }
     ]
   };
+}
+
+function paymentStatusLabel(status: SlipUploadedNotification["paymentStatus"]) {
+  if (status === "paid") return "ตรวจผ่านแล้ว";
+  if (status === "failed") return "ตรวจไม่ผ่าน";
+  return "รอผู้ดูแลตรวจ";
+}
+
+function adminOrderUrl(orderNumber: string) {
+  return `${SITE_URL.replace(/\/$/, "")}/admin/orders?order=${encodeURIComponent(orderNumber)}`;
+}
+
+function normalizeHttpsImageUrl(value?: string) {
+  if (!value) return "";
+
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" ? url.toString() : "";
+  } catch {
+    return "";
+  }
 }
 
 export function buildAdminOrderMessage(order: CustomerOrder) {
@@ -225,6 +260,179 @@ export function buildAdminOrderFlexMessage(order: CustomerOrder): LineMessage {
   };
 }
 
+export function buildSlipUploadedFlexMessage(input: SlipUploadedNotification): LineMessage {
+  const slipImageUrl = createSlipLineImageUrl(input.slipPath) || normalizeHttpsImageUrl(input.slipUrl);
+  const orderTag = `#${input.orderNumber}`;
+  const statusLabel = paymentStatusLabel(input.paymentStatus);
+  const adminUrl = adminOrderUrl(input.orderNumber);
+
+  return {
+    type: "flex",
+    altText: `มีสลิปใหม่ ${input.orderNumber}`,
+    contents: {
+      type: "bubble",
+      size: "giga",
+      header: {
+        type: "box",
+        layout: "vertical",
+        paddingAll: "20px",
+        backgroundColor: "#F48BB0",
+        contents: [
+          {
+            type: "text",
+            text: BRAND_NAME,
+            size: "sm",
+            color: "#FFFFFF",
+            weight: "bold"
+          },
+          {
+            type: "text",
+            text: "มีสลิปมัดจำใหม่",
+            margin: "md",
+            size: "xl",
+            color: "#FFFFFF",
+            weight: "bold",
+            wrap: true
+          },
+          {
+            type: "text",
+            text: orderTag,
+            margin: "sm",
+            size: "md",
+            color: "#FFF3F7",
+            weight: "bold",
+            wrap: true
+          }
+        ]
+      },
+      ...(slipImageUrl ? {
+        hero: {
+          type: "image",
+          url: slipImageUrl,
+          size: "full",
+          aspectMode: "fit",
+          aspectRatio: "3:4",
+          backgroundColor: "#FFF7FA"
+        }
+      } : {}),
+      body: {
+        type: "box",
+        layout: "vertical",
+        spacing: "md",
+        contents: [
+          {
+            type: "box",
+            layout: "horizontal",
+            spacing: "md",
+            contents: [
+              {
+                type: "box",
+                layout: "vertical",
+                backgroundColor: "#FFF0F6",
+                cornerRadius: "12px",
+                paddingAll: "14px",
+                contents: [
+                  {
+                    type: "text",
+                    text: "ยอดที่ต้องชำระ",
+                    size: "xs",
+                    color: "#777777"
+                  },
+                  {
+                    type: "text",
+                    text: money(input.expectedAmount),
+                    margin: "sm",
+                    size: "lg",
+                    color: "#E94F86",
+                    weight: "bold",
+                    wrap: true
+                  }
+                ]
+              },
+              {
+                type: "box",
+                layout: "vertical",
+                backgroundColor: input.paymentStatus === "paid" ? "#F3FAF3" : input.paymentStatus === "failed" ? "#FFF1F1" : "#FFF8E8",
+                cornerRadius: "12px",
+                paddingAll: "14px",
+                contents: [
+                  {
+                    type: "text",
+                    text: "ผลตรวจสลิป",
+                    size: "xs",
+                    color: "#777777"
+                  },
+                  {
+                    type: "text",
+                    text: statusLabel,
+                    margin: "sm",
+                    size: "lg",
+                    color: input.paymentStatus === "paid" ? "#2E7D32" : input.paymentStatus === "failed" ? "#D32F2F" : "#B7791F",
+                    weight: "bold",
+                    wrap: true
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            type: "separator",
+            margin: "md",
+            color: "#F9D7E5"
+          },
+          buildInfoRow("เลขออเดอร์", orderTag),
+          buildInfoRow("ลูกค้า", input.customerName || "-"),
+          buildInfoRow("เบอร์โทร", input.phone || "-"),
+          input.lineId ? buildInfoRow("LINE ID", input.lineId) : {
+            type: "text",
+            text: "ไม่มี LINE ID",
+            size: "xs",
+            color: "#999999",
+            wrap: true
+          },
+          buildInfoRow("ยอดในสลิป", money(input.amount)),
+          buildInfoRow("ข้อความตรวจ", truncateText(input.verificationMessage || "-", 180)),
+          slipImageUrl ? {
+            type: "text",
+            text: "แนบรูปสลิปไว้ด้านบนของการแจ้งเตือนแล้ว",
+            size: "xs",
+            color: "#999999",
+            wrap: true
+          } : {
+            type: "text",
+            text: "ยังแสดงรูปสลิปใน LINE ไม่ได้ กรุณาตั้งค่า NEXT_PUBLIC_SITE_URL เป็น HTTPS แล้วลองส่งอีกครั้ง",
+            size: "xs",
+            color: "#D32F2F",
+            wrap: true
+          }
+        ]
+      },
+      footer: {
+        type: "box",
+        layout: "vertical",
+        spacing: "sm",
+        contents: [
+          {
+            type: "button",
+            style: "primary",
+            color: "#F48BB0",
+            action: {
+              type: "uri",
+              label: "เปิดออเดอร์นี้ในแอดมิน",
+              uri: adminUrl
+            }
+          }
+        ]
+      },
+      styles: {
+        footer: {
+          separator: true
+        }
+      }
+    }
+  };
+}
+
 function buildTextFlexMessage(message: string): LineMessage {
   const lines = message.split("\n").filter(Boolean);
 
@@ -277,10 +485,10 @@ function buildTextFlexMessage(message: string): LineMessage {
 async function pushLineMessages(messages: LineMessage[]) {
   const settings = await readLineSettings();
   const token = settings.channelAccessToken;
-  const groupId = settings.adminGroupId;
+  const recipientId = settings.adminGroupId;
 
-  if (!token || !groupId) {
-    throw new Error("ยังไม่ได้ตั้งค่า LINE_CHANNEL_ACCESS_TOKEN หรือ LINE_ADMIN_GROUP_ID");
+  if (!token || !recipientId) {
+    throw new Error("ยังไม่ได้ตั้งค่า LINE_CHANNEL_ACCESS_TOKEN หรือรหัสผู้รับ LINE");
   }
 
   const response = await fetch(LINE_PUSH_ENDPOINT, {
@@ -290,13 +498,21 @@ async function pushLineMessages(messages: LineMessage[]) {
       "Content-Type": "application/json"
     },
     body: JSON.stringify({
-      to: groupId,
+      to: recipientId,
       messages
     })
   });
 
   if (!response.ok) {
     const detail = await response.text();
+    if (response.status === 401) {
+      throw new Error("ส่งข้อความ LINE ไม่สำเร็จ: Channel access token ไม่ถูกต้อง หมดอายุ หรือไม่ใช่ token ของ Messaging API กรุณาใส่ token ใหม่ในหน้า admin/settings");
+    }
+
+    if (response.status === 400) {
+      throw new Error(`ส่งข้อความ LINE ไม่สำเร็จ: รหัสผู้รับอาจไม่ถูกต้อง หรือผู้รับยังไม่ได้เพิ่ม/คุยกับ LINE Bot (${detail})`);
+    }
+
     throw new Error(`ส่งข้อความ LINE ไม่สำเร็จ (${response.status}) ${detail}`);
   }
 }

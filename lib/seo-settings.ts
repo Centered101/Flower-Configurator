@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { BRAND_NAME, CREATOR_NAME, SITE_URL } from "@/lib/brand";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 
@@ -120,7 +121,7 @@ export function keywordsToArray(value: string) {
     .filter(Boolean);
 }
 
-export async function readSeoSettings(): Promise<SeoSettings> {
+async function readSeoSettingsUncached(): Promise<SeoSettings> {
   const fallback = fallbackSettings();
 
   try {
@@ -153,6 +154,8 @@ export async function readSeoSettings(): Promise<SeoSettings> {
     return fallback;
   }
 }
+
+export const readSeoSettings = cache(readSeoSettingsUncached);
 
 export async function saveSeoSettings(input: Partial<SeoSettings>) {
   const fallback = fallbackSettings();

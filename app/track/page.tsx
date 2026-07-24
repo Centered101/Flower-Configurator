@@ -5,10 +5,11 @@ import { CalendarCheck, PackageCheck, Search } from "lucide-react";
 import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
 import { ProductPreview } from "@/components/configurator/ProductPreview";
+import { DepositPaymentCard } from "@/components/DepositPaymentCard";
 import { EmptyState } from "@/components/EmptyState";
 import { HelpTooltip } from "@/components/HelpTooltip";
 import { StatusTimeline } from "@/components/StatusTimeline";
-import { formatThaiIsoDate } from "@/lib/date-format";
+import { formatThaiDateTime, formatThaiIsoDate } from "@/lib/date-format";
 import { findOrder, getStoredOrders, listenForOrderUpdates, sortOrdersByOrderNumber } from "@/lib/orders";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import type { CustomerOrder, OrderStatus } from "@/lib/types";
@@ -193,6 +194,11 @@ export default function TrackPage() {
     setOrder(nextOrder);
     setSearchResults([]);
     window.history.replaceState(null, "", `/track?order=${encodeURIComponent(nextOrder.orderNumber)}${phoneSuffix ? `&phone=${encodeURIComponent(phoneSuffix)}` : ""}`);
+  }
+
+  function updateSelectedOrder(nextOrder: CustomerOrder) {
+    setOrder(nextOrder);
+    setOrders((current) => mergeOrders([nextOrder], current));
   }
 
   function handleSearch() {
@@ -382,30 +388,41 @@ export default function TrackPage() {
         {order === null ? <div className="mt-6"><EmptyState title="ไม่พบคำสั่งซื้อ" message="ตรวจสอบเลขคำสั่งซื้อและเบอร์โทร 4 ตัวท้ายอีกครั้ง" /></div> : null}
         {order ? (
           <section className="mt-6 grid w-full gap-6 lg:grid-cols-[minmax(0,1fr)_400px]">
-            <div className="rounded-bloom border border-pink-100 bg-white p-5 shadow-sm">
-              <p className="text-sm text-zinc-500">เลขคำสั่งซื้อ</p>
-              <h2 className="text-2xl font-bold">{order.orderNumber}</h2>
-              <div className="mt-5">
-                <StatusTimeline status={order.orderStatus} />
-              </div>
-              <div className="mt-5 rounded-soft bg-blush p-4">
-                <p className="font-bold">
-                  {isDeliveryOrder(order) ? "วันจัดส่งโดยประมาณ" : "วันรับ"}: {fulfillmentText(order)}
-                </p>
-                {isDeliveryOrder(order) ? (
-                  order.trackingNumber ? (
+            <div className="space-y-5">
+              <div className="rounded-bloom border border-pink-100 bg-white p-5 shadow-sm">
+                <p className="text-sm text-zinc-500">เลขคำสั่งซื้อ</p>
+                <h2 className="break-words text-2xl font-bold">{order.orderNumber}</h2>
+                <div className="mt-5">
+                  <StatusTimeline status={order.orderStatus} />
+                </div>
+                <div className="mt-5 rounded-soft bg-blush p-4">
+                  <p className="font-bold">
+                    {isDeliveryOrder(order) ? "วันจัดส่งโดยประมาณ" : "วันรับ"}: {fulfillmentText(order)}
+                  </p>
+                  {isDeliveryOrder(order) ? (
+                    order.trackingNumber ? (
+                      <p className="text-zinc-600">
+                        เลขพัสดุ: <span className="font-bold text-ink">{order.trackingCarrier ? `${order.trackingCarrier} ` : ""}{order.trackingNumber}</span>
+                        {order.trackingUrl ? <a href={order.trackingUrl} target="_blank" rel="noreferrer" className="ml-2 font-bold text-blossom">ตรวจสอบพัสดุ</a> : null}
+                      </p>
+                    ) : (
+                      <p className="text-zinc-600">เลขพัสดุจะแสดงที่นี่เมื่อร้านส่งของแล้ว</p>
+                    )
+                  ) : null}
+                  <p className="text-zinc-600">ยอดคงเหลือ: {order.total - order.depositAmount} บาท</p>
+                  <p className="text-zinc-600">ชำระเงิน: <span className="font-bold text-ink">{paymentStatusLabels[order.paymentStatus]}</span></p>
+                  {order.paymentSlip ? (
                     <p className="text-zinc-600">
-                      เลขพัสดุ: <span className="font-bold text-ink">{order.trackingCarrier ? `${order.trackingCarrier} ` : ""}{order.trackingNumber}</span>
-                      {order.trackingUrl ? <a href={order.trackingUrl} target="_blank" rel="noreferrer" className="ml-2 font-bold text-blossom">ตรวจสอบพัสดุ</a> : null}
+                      สลิป: <span className="font-bold text-ink">อัปโหลดแล้ว</span>
+                      {order.paymentSlip.uploadedAt ? ` เมื่อ ${formatThaiDateTime(order.paymentSlip.uploadedAt)}` : ""}
                     </p>
-                  ) : (
-                    <p className="text-zinc-600">เลขพัสดุจะแสดงที่นี่เมื่อร้านส่งของแล้ว</p>
-                  )
-                ) : null}
-                <p className="text-zinc-600">ยอดคงเหลือ: {order.total - order.depositAmount} บาท</p>
-                <p className="text-zinc-600">ชำระเงิน: <span className="font-bold text-ink">{paymentStatusLabels[order.paymentStatus]}</span></p>
-                <p className="mt-2 text-sm text-zinc-600">รูปความคืบหน้าจากร้านจะแสดงที่นี่เมื่อมีการอัปโหลด</p>
+                  ) : null}
+                  <p className="mt-2 text-sm text-zinc-600">รูปความคืบหน้าจากร้านจะแสดงที่นี่เมื่อมีการอัปโหลด</p>
+                </div>
               </div>
+              {order.paymentStatus !== "paid" && order.paymentStatus !== "refunded" ? (
+                <DepositPaymentCard order={order} onOrderUpdated={updateSelectedOrder} />
+              ) : null}
             </div>
             <ProductPreview config={order.config} />
           </section>

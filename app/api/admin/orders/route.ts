@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getAdminSessionWithDatabaseRole } from "@/lib/admin-session";
+import { createPaymentSlipDisplayUrl } from "@/lib/payment-slip-url";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import type { CustomerOrder, OrderStatus } from "@/lib/types";
 
@@ -151,8 +152,12 @@ function getOrderTitle(item?: OrderItemRow) {
   return "ออเดอร์ออกแบบเอง";
 }
 
-function mapOrder(row: OrderRow, item?: OrderItemRow, payment?: PaymentRow): AdminOrder {
+async function mapOrder(row: OrderRow, item?: OrderItemRow, payment?: PaymentRow): Promise<AdminOrder> {
   const json = isRecord(item?.customization_json) ? item.customization_json : {};
+  const slipUrl = payment ? await createPaymentSlipDisplayUrl({
+    slipPath: payment.slip_path,
+    fallbackUrl: payment.slip_url
+  }) : "";
 
   return {
     id: row.id,
@@ -186,7 +191,7 @@ function mapOrder(row: OrderRow, item?: OrderItemRow, payment?: PaymentRow): Adm
       amount: toNumber(payment.amount),
       verifiedAmount: payment.verified_amount === null ? undefined : toNumber(payment.verified_amount),
       status: payment.status,
-      slipUrl: payment.slip_url ?? "",
+      slipUrl,
       slipPath: payment.slip_path ?? "",
       verificationMessage: payment.verification_message ?? "",
       receiverMatched: payment.receiver_matched,
@@ -260,7 +265,9 @@ export async function GET() {
       if (!paymentByOrderId.has(payment.order_id)) paymentByOrderId.set(payment.order_id, payment);
     }
 
-    return NextResponse.json(orderRows.map((order) => mapOrder(order, itemByOrderId.get(order.id), paymentByOrderId.get(order.id))), {
+    const mappedOrders = await Promise.all(orderRows.map((order) => mapOrder(order, itemByOrderId.get(order.id), paymentByOrderId.get(order.id))));
+
+    return NextResponse.json(mappedOrders, {
       headers: {
         "Cache-Control": "no-store"
       }

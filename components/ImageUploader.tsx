@@ -41,15 +41,15 @@ export function ImageUploader({ bucket = "order-reference-images", folder = "ord
         method: "POST",
         body: formData
       });
-      const data = await response.json();
+      const data = await response.json().catch(() => null) as (ProcessedImage & { error?: string }) | null;
 
-      if (!response.ok) {
-        throw new Error(data.error ?? "อัปโหลดรูปภาพไม่สำเร็จ");
+      if (!response.ok || !data) {
+        throw new Error(data?.error ?? "อัปโหลดรูปภาพไม่สำเร็จ");
       }
 
-      setResult(data as ProcessedImage);
-      setPreviewUrl((data as ProcessedImage).url);
-      onUploaded?.(data as ProcessedImage);
+      setResult(data);
+      setPreviewUrl(data.url);
+      onUploaded?.(data);
       toast.success("อัปโหลดรูปภาพสำเร็จ");
     } catch (uploadError) {
       const message = uploadError instanceof Error ? uploadError.message : "อัปโหลดรูปภาพไม่สำเร็จ";
@@ -84,9 +84,13 @@ export function ImageUploader({ bucket = "order-reference-images", folder = "ord
 
   async function copyUrl() {
     if (!result?.url) return;
-    await navigator.clipboard.writeText(result.url);
-    setIsCopied(true);
-    toast.success("คัดลอกลิงก์รูปภาพแล้ว");
+    try {
+      await navigator.clipboard.writeText(result.url);
+      setIsCopied(true);
+      toast.success("คัดลอกลิงก์รูปภาพแล้ว");
+    } catch {
+      toast.error("คัดลอกลิงก์ไม่สำเร็จ กรุณาคัดลอกด้วยตัวเอง");
+    }
   }
 
   return (

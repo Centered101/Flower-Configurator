@@ -22,7 +22,15 @@ function getAuthErrorMessage(message: string) {
   return message;
 }
 
-export function LoginForm({ redirectTo = "/" }: { redirectTo?: string }) {
+export function LoginForm({
+  redirectTo = "/",
+  showBackLink = true,
+  onSignedIn
+}: {
+  redirectTo?: string;
+  showBackLink?: boolean;
+  onSignedIn?: () => void;
+}) {
   const router = useRouter();
   const supabase = useMemo(() => createSupabaseBrowserClient(), []);
   const [mode, setMode] = useState<AuthMode>("sign-in");
@@ -134,19 +142,26 @@ export function LoginForm({ redirectTo = "/" }: { redirectTo?: string }) {
     }
 
     toast.success("เข้าสู่ระบบสำเร็จ");
+    if (onSignedIn) {
+      onSignedIn();
+      return;
+    }
+
     router.replace(redirectTo);
     router.refresh();
   }
 
   return (
     <div className="mx-auto max-w-md">
-      <Link
-        href="/"
-        className="mb-6 inline-flex min-h-11 items-center gap-2 rounded-full border border-pink-100 bg-blush px-4 text-sm font-bold text-ink transition hover:border-blossom hover:bg-blossom hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blossom"
-      >
-        <ArrowLeft size={17} aria-hidden="true" />
-        กลับหน้าแรก
-      </Link>
+      {showBackLink ? (
+        <Link
+          href="/"
+          className="mb-6 inline-flex min-h-11 items-center gap-2 rounded-full border border-pink-100 bg-blush px-4 text-sm font-bold text-ink transition hover:border-blossom hover:bg-blossom hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blossom"
+        >
+          <ArrowLeft size={17} aria-hidden="true" />
+          กลับหน้าแรก
+        </Link>
+      ) : null}
       <div>
         <div className="flex items-start justify-between gap-3">
           <div>

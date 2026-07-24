@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { OrderableItemCard } from "@/components/OrderableItemCard";
-import { ADMIN_PRODUCTS_KEY, fetchPublicProducts, readAdminItems, saveAdminItems, type AdminProduct } from "@/lib/admin-data";
+import type { AdminProduct } from "@/lib/admin-data";
 import { getFavoriteProductIds, listenForFavoriteUpdates, syncFavoritesWithSupabase, toggleFavoriteProduct } from "@/lib/favorites";
 import { saveQuickOrder } from "@/lib/quick-order";
 
@@ -18,20 +18,16 @@ type HomeProductCard = {
   image?: AdminProduct["image"];
 };
 
-export function HomeProductTypesSection() {
+export function HomeProductTypesSection({ initialProducts = [] }: { initialProducts?: AdminProduct[] }) {
   const router = useRouter();
-  const [adminProducts, setAdminProducts] = useState<AdminProduct[]>([]);
+  const [adminProducts, setAdminProducts] = useState<AdminProduct[]>(initialProducts);
   const [favoriteIds, setFavoriteIds] = useState<string[]>([]);
 
   useEffect(() => {
-    const localProducts = readAdminItems<AdminProduct>(ADMIN_PRODUCTS_KEY);
-    setAdminProducts(localProducts);
-    fetchPublicProducts()
-      .then((products) => {
-        setAdminProducts(products);
-        saveAdminItems(ADMIN_PRODUCTS_KEY, products);
-      })
-      .catch(() => setAdminProducts(localProducts));
+    setAdminProducts(initialProducts);
+  }, [initialProducts]);
+
+  useEffect(() => {
     setFavoriteIds(getFavoriteProductIds());
     syncFavoritesWithSupabase().then((favorites) => setFavoriteIds(favorites.productIds)).catch(() => undefined);
   }, []);

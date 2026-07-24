@@ -44,12 +44,13 @@ export function Navbar() {
     try {
       const supabase = createSupabaseBrowserClient();
 
-      supabase.auth.getUser()
+      supabase.auth.getSession()
         .then(({ data }) => {
           if (!isMounted) return;
-          setCustomer(data.user ? {
-            email: data.user.email,
-            displayName: getCustomerDisplayName(data.user.user_metadata)
+          const user = data.session?.user;
+          setCustomer(user ? {
+            email: user.email,
+            displayName: getCustomerDisplayName(user.user_metadata)
           } : null);
         })
         .catch(() => {
