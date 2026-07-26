@@ -36,6 +36,8 @@ export class OptionalSchemaMissingError extends Error {
 export type AdminGalleryItem = {
   id: string;
   title: string;
+  productId?: string;
+  flowerTypeId?: string;
   flower: string;
   color: string;
   size: string;
@@ -145,7 +147,7 @@ export async function persistOptionMaterialLinks(links: DesignOptionMaterialLink
   try {
     return await readResponse<DesignOptionMaterialLink[]>(response, "บันทึกการผูกวัสดุไม่สำเร็จ");
   } catch (error) {
-    if (error instanceof Error && error.message.includes("design_option_materials")) {
+    if (error instanceof Error && (error.message.includes("design_option_materials") || error.message.includes("ระบบเชื่อมวัสดุ"))) {
       throw new OptionalSchemaMissingError(error.message);
     }
 

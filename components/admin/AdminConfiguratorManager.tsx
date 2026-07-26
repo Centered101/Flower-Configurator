@@ -44,13 +44,13 @@ const tabs: { id: TabId; label: string }[] = [
 ];
 
 const tabHelps: Record<TabId, string> = {
-  products: "ประเภทสินค้าในหน้านี้ใช้เป็นตัวเลือกเริ่มต้นของหน้าออกแบบ แยกจากตารางสินค้าสำเร็จรูป",
+  products: "ประเภทสินค้านี้ใช้เป็นตัวเลือกเริ่มต้นในหน้าออกแบบ แยกจากสินค้าพร้อมสั่งซื้อ",
   flowers: "ชนิดดอกไม้กำหนดว่าลูกค้าเลือกดอกอะไรได้ และสต็อกวัสดุช่วยบอกความพร้อมในการผลิต",
-  colors: "สีดอกไม้ใช้กับตัวอย่าง SVG และตัวเลือกสีของลูกค้าในหน้าออกแบบ",
+  colors: "สีดอกไม้ใช้กับภาพตัวอย่างและตัวเลือกสีของลูกค้าในหน้าออกแบบ",
   stems: "ตัวเลือกก้านมีผลกับภาพตัวอย่าง ราคา และรายละเอียดงานที่ลูกค้าสั่ง",
   arrangement: "การจัดช่อและริบบิ้นคือวิธีห่อหรือผูกงาน เพิ่มราคาได้ตามตัวเลือก",
-  decorations: "ของตกแต่งเป็น option เสริม เช่น การ์ด กล่อง หรือของแนบเพิ่มเติม",
-  review: "ข้อความหมายเหตุจะแสดงในขั้นตรวจสอบก่อนลูกค้ากดไป checkout"
+  decorations: "ของตกแต่งเป็นตัวเลือกเสริม เช่น การ์ด กล่อง หรือของแนบเพิ่มเติม",
+  review: "ข้อความหมายเหตุจะแสดงในขั้นตรวจสอบก่อนลูกค้ากดไปหน้าสั่งซื้อ"
 };
 
 function toNumber(value: string) {
@@ -79,9 +79,9 @@ export function AdminConfiguratorManager() {
           return;
         }
 
-        toast.warning("ฐานข้อมูลตัวเลือกออกแบบยังว่าง ใช้ข้อมูลในเครื่องชั่วคราว");
+        toast.warning("ข้อมูลตัวเลือกออกแบบยังว่าง ใช้ข้อมูลในเครื่องชั่วคราว");
       })
-      .catch(() => toast.warning("ยังเชื่อมฐานข้อมูลไม่ได้ ใช้ข้อมูลในเครื่องชั่วคราว"));
+      .catch(() => toast.warning("ยังเชื่อมข้อมูลในระบบไม่ได้ ใช้ข้อมูลในเครื่องชั่วคราว"));
 
     fetchAdminMaterials()
       .then(setMaterials)
@@ -91,7 +91,7 @@ export function AdminConfiguratorManager() {
         setMaterialLinks(links);
         setIsMaterialLinkSchemaReady(schemaReady);
         if (!schemaReady) {
-          toast.warning("ยังไม่ได้เปิดใช้ตารางผูกวัสดุ กรุณารัน supabase/schema.sql ก่อน");
+          toast.warning("ยังใช้ระบบเชื่อมวัสดุไม่ได้ กรุณาอัปเดตโครงสร้างฐานข้อมูลก่อน");
         }
       })
       .catch(() => undefined);
@@ -301,10 +301,10 @@ export function AdminConfiguratorManager() {
       toast.success(savedMaterialLinks ? "บันทึกตัวเลือกและวัสดุที่ใช้แล้ว" : "บันทึกตัวเลือกแล้ว");
 
       if (!savedMaterialLinks && nextLinks.length) {
-        toast.warning("ยังบันทึกการผูกวัสดุไม่ได้ ต้องรัน supabase/schema.sql เพื่อสร้างตาราง design_option_materials ก่อน");
+        toast.warning("ยังบันทึกวัสดุที่ใช้ไม่ได้ กรุณาอัปเดตโครงสร้างฐานข้อมูลก่อน");
       }
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "บันทึกลงฐานข้อมูลไม่สำเร็จ แต่เก็บไว้ในเครื่องแล้ว");
+      toast.error(error instanceof Error ? error.message : "บันทึกลงระบบไม่สำเร็จ แต่เก็บไว้ในเครื่องแล้ว");
     } finally {
       setIsSaving(false);
     }
@@ -713,7 +713,7 @@ function ColorField({ label, value, onChange }: { label: string; value: string; 
     <div className="relative">
       <span className="mb-1 flex items-center gap-2 text-sm font-semibold text-ink">
         {label}
-        <HelpTooltip content="กดวงกลมเพื่อเปิดตัวเลือกสี ลากในกล่องสีหรือแถบเฉดสีได้ และใช้ปุ่มดูดสีถ้า browser รองรับ" />
+        <HelpTooltip content="กดวงกลมเพื่อเปิดตัวเลือกสี ลากในกล่องสีหรือแถบเฉดสีได้ และใช้ปุ่มดูดสีถ้าอุปกรณ์รองรับ" />
       </span>
       <span className="grid touch-target w-full min-w-0 grid-cols-[36px_minmax(0,1fr)] items-center gap-2 rounded-soft border border-pink-100 bg-white px-2">
         <button
@@ -853,7 +853,7 @@ function MaterialUsageEditor({
 }) {
   function addLink() {
     if (!schemaReady) {
-      toast.warning("ยังผูกวัสดุไม่ได้ กรุณารัน supabase/schema.sql ก่อน");
+      toast.warning("ยังเชื่อมวัสดุไม่ได้ กรุณาอัปเดตโครงสร้างฐานข้อมูลก่อน");
       return;
     }
 
@@ -895,7 +895,7 @@ function MaterialUsageEditor({
       </div>
       {!schemaReady ? (
         <p className="mt-3 rounded-soft bg-yellow-50 p-3 text-sm font-semibold text-yellow-700">
-          ยังใช้ระบบผูกวัสดุไม่ได้ ต้องรัน supabase/schema.sql เพื่อสร้างตาราง design_option_materials ก่อน
+          ยังใช้ระบบเชื่อมวัสดุไม่ได้ กรุณาอัปเดตโครงสร้างฐานข้อมูลก่อน
         </p>
       ) : materials.length ? (
         links.length ? (
@@ -941,7 +941,7 @@ function MaterialUsageEditor({
             })}
           </div>
         ) : (
-          <p className="mt-3 rounded-soft bg-blush/50 p-3 text-sm font-semibold text-zinc-600">ยังไม่ได้ผูกวัสดุกับตัวเลือกนี้</p>
+          <p className="mt-3 rounded-soft bg-blush/50 p-3 text-sm font-semibold text-zinc-600">ยังไม่ได้เลือกวัสดุให้ตัวเลือกนี้</p>
         )
       ) : (
         <p className="mt-3 rounded-soft bg-yellow-50 p-3 text-sm font-semibold text-yellow-700">ยังไม่มีวัสดุในสต็อก ให้เพิ่มในหน้า วัสดุ ก่อน</p>

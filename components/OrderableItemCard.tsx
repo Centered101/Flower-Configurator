@@ -2,7 +2,6 @@
 
 import Image from "next/image";
 import { Heart, ShoppingBag } from "lucide-react";
-import { HelpTooltip } from "@/components/HelpTooltip";
 
 type CardImage = {
   url: string;
@@ -55,9 +54,8 @@ export function OrderableItemCard({
       <h2 className="mt-4 font-bold text-ink">{title}</h2>
       <p className="mt-1 text-sm text-zinc-600">{details}</p>
       <p className="mt-2 font-bold text-blossom">{priceText}</p>
-      <p className="mt-1 inline-flex items-center gap-2 text-sm font-semibold text-zinc-600">
+      <p className="mt-1 text-sm font-semibold text-zinc-600">
         คะแนนการผลิต {Math.max(1, Number(productionScore || 1)).toLocaleString("th-TH")} คะแนน
-        <HelpTooltip content="คะแนนนี้ใช้ประเมินคิวและวันรับสินค้า ยิ่งคะแนนสูงยิ่งใช้เวลาผลิตมากขึ้น" />
       </p>
       <div className="mt-4 grid grid-cols-[4fr_1fr] gap-2">
         <button

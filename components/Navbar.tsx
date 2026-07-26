@@ -7,7 +7,6 @@ import { usePathname } from "next/navigation";
 import { Menu, ShoppingBag, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { BrandLogo } from "@/components/BrandLogo";
-import { PageHelpTooltip } from "@/components/PageHelpTooltip";
 import { BRAND_NAME } from "@/lib/brand";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 
@@ -105,7 +104,6 @@ export function Navbar() {
             })}
           </div>
           <div className="flex shrink-0 items-center gap-1.5">
-            <PageHelpTooltip className="hidden lg:inline-flex" />
             <Link
               href={customerHref}
               aria-current={pathname === customerHref ? "page" : undefined}
@@ -121,7 +119,6 @@ export function Navbar() {
               <ShoppingBag size={18} aria-hidden="true" />
               เริ่มออกแบบ
             </Link>
-            <PageHelpTooltip className="lg:hidden" />
             <button
               type="button"
               suppressHydrationWarning

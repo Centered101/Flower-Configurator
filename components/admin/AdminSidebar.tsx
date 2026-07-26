@@ -20,9 +20,9 @@ const nav = [
 ] as const;
 
 const roleLabels = {
-  owner: "Owner",
-  superadmin: "Superadmin",
-  admin: "Admin"
+  owner: "เจ้าของร้าน",
+  superadmin: "หัวหน้าผู้ดูแล",
+  admin: "ผู้ดูแล"
 } as const;
 
 export function AdminSidebar({
@@ -122,7 +122,7 @@ export function AdminSidebar({
             <div className="min-w-0">
               <p className="truncate text-sm font-bold text-ink">{profile?.displayName ?? "ผู้ดูแลร้าน"}</p>
               <p className="truncate text-xs font-semibold text-zinc-500">
-                {profile?.username ? `@${profile.username} · ${roleLabels[profile.role ?? "admin"]}` : "Admin"}
+                {profile?.username ? `@${profile.username} · ${roleLabels[profile.role ?? "admin"]}` : "ผู้ดูแล"}
               </p>
             </div>
           </div>

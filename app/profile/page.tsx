@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import type { ReactNode } from "react";
-import { CalendarCheck, Heart, Loader2, LogOut, Mail, MapPin, MessageCircle, PackageCheck, Phone, Save, Search, Trash2, UserRound } from "lucide-react";
+import { CalendarCheck, Heart, KeyRound, Loader2, LogOut, Mail, MapPin, MessageCircle, PackageCheck, Phone, Save, Search, Trash2, UserRound } from "lucide-react";
 import type { User } from "@supabase/supabase-js";
 import { toast } from "sonner";
 import { Footer } from "@/components/Footer";
@@ -108,12 +108,16 @@ export default function CustomerProfilePage() {
   const [phone, setPhone] = useState("");
   const [lineId, setLineId] = useState("");
   const [address, setAddress] = useState("");
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [orders, setOrders] = useState<CustomerOrder[]>([]);
   const [favoriteItems, setFavoriteItems] = useState<AdminGalleryItem[]>([]);
   const [favoriteProducts, setFavoriteProducts] = useState<AdminProduct[]>([]);
   const [deletionRequests, setDeletionRequests] = useState<DataDeletionRequest[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
   const [isDeletingData, setIsDeletingData] = useState(false);
   const [isSigningOut, setIsSigningOut] = useState(false);
 
@@ -125,7 +129,7 @@ export default function CustomerProfilePage() {
       client = createSupabaseBrowserClient();
       setSupabase(client);
     } catch {
-      toast.error("ยังไม่ได้ตั้งค่า Supabase สำหรับระบบลูกค้า");
+      toast.error("ยังไม่ได้ตั้งค่าระบบบัญชีลูกค้า");
       setIsLoading(false);
       router.replace("/login?redirect=/profile");
       return () => {
@@ -299,8 +303,57 @@ export default function CustomerProfilePage() {
     toast.success("บันทึกโปรไฟล์แล้ว");
   }
 
+  async function handleChangePassword(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!supabase || !user?.email || isChangingPassword) return;
+
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      toast.warning("กรุณากรอกรหัสผ่านให้ครบ");
+      return;
+    }
+
+    if (newPassword.length < 6) {
+      toast.warning("รหัสผ่านใหม่ต้องมีอย่างน้อย 6 ตัวอักษร");
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      toast.warning("รหัสผ่านใหม่ไม่ตรงกัน");
+      return;
+    }
+
+    setIsChangingPassword(true);
+
+    const { error: signInError } = await supabase.auth.signInWithPassword({
+      email: user.email,
+      password: currentPassword
+    });
+
+    if (signInError) {
+      setIsChangingPassword(false);
+      toast.error("รหัสผ่านเดิมไม่ถูกต้อง");
+      return;
+    }
+
+    const { error } = await supabase.auth.updateUser({
+      password: newPassword
+    });
+
+    setIsChangingPassword(false);
+
+    if (error) {
+      toast.error(error.message || "เปลี่ยนรหัสผ่านไม่สำเร็จ");
+      return;
+    }
+
+    setCurrentPassword("");
+    setNewPassword("");
+    setConfirmPassword("");
+    toast.success("เปลี่ยนรหัสผ่านแล้ว");
+  }
+
   async function signOutCustomerSession() {
-    if (!supabase) return new Error("ยังไม่ได้ตั้งค่า Supabase สำหรับระบบลูกค้า");
+    if (!supabase) return new Error("ยังไม่ได้ตั้งค่าระบบบัญชีลูกค้า");
 
     try {
       const { error } = await supabase.auth.signOut();
@@ -326,7 +379,7 @@ export default function CustomerProfilePage() {
       return;
     }
 
-    const confirmed = window.confirm("ยืนยันลบบัญชี Supabase/Auth และข้อมูลของบัญชีนี้หรือไม่? ถ้ามีคำสั่งซื้อที่ชำระแล้ว ระบบจะไม่อนุญาตให้ลบ");
+    const confirmed = window.confirm("ยืนยันลบบัญชีลูกค้าและข้อมูลของบัญชีนี้หรือไม่? ถ้ามีคำสั่งซื้อที่ชำระแล้ว ระบบจะไม่อนุญาตให้ลบ");
     if (!confirmed) return;
 
     setIsDeletingData(true);
@@ -406,7 +459,7 @@ export default function CustomerProfilePage() {
   return (
     <div className="flex min-h-screen flex-col">
       <Navbar />
-      <main className="container-page flex-1 py-8">
+      <main className="container-page min-h-screen flex-1 py-8">
         <div className="mx-auto max-w-6xl">
           <div className="mb-5">
             <p className="text-sm font-semibold text-blossom">บัญชีลูกค้า</p>
@@ -490,7 +543,7 @@ export default function CustomerProfilePage() {
                 <button
                   type="submit"
                   suppressHydrationWarning
-                  disabled={isSaving || isSigningOut}
+                  disabled={isSaving || isChangingPassword || isSigningOut}
                   className="touch-target mt-4 inline-flex w-full items-center justify-center gap-2 rounded-soft bg-blossom px-4 py-3 font-bold text-white shadow-soft transition-colors hover:bg-pink-400 disabled:cursor-not-allowed disabled:opacity-65"
                 >
                   {isSaving ? <Loader2 size={18} className="animate-spin" aria-hidden="true" /> : <Save size={18} aria-hidden="true" />}
@@ -500,7 +553,7 @@ export default function CustomerProfilePage() {
                 <button
                   type="button"
                   suppressHydrationWarning
-                  disabled={isSaving || isSigningOut}
+                  disabled={isSaving || isChangingPassword || isSigningOut}
                   onClick={handleSignOut}
                   className="touch-target mt-4 inline-flex w-full items-center justify-center gap-2 rounded-soft bg-ink px-4 py-3 font-bold text-white transition-colors hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-65"
                 >
@@ -510,6 +563,43 @@ export default function CustomerProfilePage() {
               </form>
 
               <div className="space-y-5">
+                <section className="space-y-4 rounded-bloom border border-pink-100 bg-white p-5 shadow-sm">
+                  <div className="flex items-center gap-2">
+                    <KeyRound size={20} className="text-blossom" aria-hidden="true" />
+                    <h2 className="font-bold text-ink">เปลี่ยนรหัสผ่าน</h2>
+                    <HelpTooltip content="ต้องใส่รหัสผ่านเดิมก่อนตั้งรหัสใหม่ เพื่อป้องกันคนอื่นมาเปลี่ยนรหัสแทน" />
+                  </div>
+                  <form onSubmit={handleChangePassword} className="grid gap-3 md:grid-cols-3">
+                    <PasswordField
+                      label="รหัสผ่านเดิม"
+                      value={currentPassword}
+                      onChange={setCurrentPassword}
+                      autoComplete="current-password"
+                    />
+                    <PasswordField
+                      label="รหัสผ่านใหม่"
+                      value={newPassword}
+                      onChange={setNewPassword}
+                      autoComplete="new-password"
+                    />
+                    <PasswordField
+                      label="ยืนยันรหัสผ่านใหม่"
+                      value={confirmPassword}
+                      onChange={setConfirmPassword}
+                      autoComplete="new-password"
+                    />
+                    <button
+                      type="submit"
+                      suppressHydrationWarning
+                      disabled={isChangingPassword || isSaving || isSigningOut}
+                      className="touch-target inline-flex items-center justify-center gap-2 rounded-soft bg-ink px-4 py-3 font-bold text-white transition-colors hover:bg-blossom disabled:cursor-not-allowed disabled:opacity-65 md:col-span-3"
+                    >
+                      {isChangingPassword ? <Loader2 size={18} className="animate-spin" aria-hidden="true" /> : <KeyRound size={18} aria-hidden="true" />}
+                      {isChangingPassword ? "กำลังเปลี่ยนรหัส..." : "เปลี่ยนรหัสผ่าน"}
+                    </button>
+                  </form>
+                </section>
+
                 <section className="space-y-3 rounded-bloom border border-pink-100 bg-white p-5 shadow-sm">
                 <div className="flex items-center gap-2">
                   <PackageCheck size={20} className="text-blossom" aria-hidden="true" />
@@ -637,7 +727,7 @@ export default function CustomerProfilePage() {
                     <HelpTooltip content="ถ้ายังไม่ชำระเงิน ระบบลบบัญชีและข้อมูลที่เกี่ยวข้องได้ทันที แต่ถ้าชำระแล้วจะยังลบไม่ได้เพื่อเก็บหลักฐานคำสั่งซื้อ" />
                   </div>
                   <p className="text-sm leading-6 text-zinc-600">
-                    ลบบัญชี Supabase/Auth และข้อมูลที่บัญชีนี้จัดการเองได้ ถ้ามีคำสั่งซื้อที่ชำระเงินแล้ว ระบบจะไม่อนุญาตให้ลบ
+                    ลบบัญชีลูกค้าและข้อมูลที่บัญชีนี้จัดการเองได้ ถ้ามีคำสั่งซื้อที่ชำระเงินแล้ว ระบบจะไม่อนุญาตให้ลบ
                     อ่านรายละเอียดได้ที่{" "}
                     <Link href="/data-deletion" className="font-bold text-blossom hover:text-ink">
                       การขอลบข้อมูล
@@ -645,7 +735,7 @@ export default function CustomerProfilePage() {
                   </p>
                   <form onSubmit={handleDeleteMyData} className="space-y-3">
                     <div className="rounded-soft border border-pink-100 bg-blush p-4 text-sm leading-6 text-zinc-700">
-                      ถ้ายังไม่ชำระเงิน ระบบจะลบบัญชี Auth, ข้อมูลติดต่อ, ประวัติคำสั่งซื้อที่ผูกกับบัญชีนี้ และรายการที่ถูกใจทันที ถ้าชำระเงินแล้วต้องติดต่อร้านก่อนเพื่อป้องกันปัญหาการตรวจสอบคำสั่งซื้อ
+                      ถ้ายังไม่ชำระเงิน ระบบจะลบบัญชี ข้อมูลติดต่อ ประวัติคำสั่งซื้อที่ผูกกับบัญชีนี้ และรายการที่ถูกใจทันที ถ้าชำระเงินแล้วต้องติดต่อร้านก่อนเพื่อป้องกันปัญหาการตรวจสอบคำสั่งซื้อ
                     </div>
                     <button
                       type="submit"
@@ -697,6 +787,36 @@ function ProfileField({ icon, label, children }: { icon: ReactNode; label: strin
         <span className="text-sm font-semibold text-zinc-500">{label}</span>
       </span>
       {children}
+    </label>
+  );
+}
+
+function PasswordField({
+  label,
+  value,
+  onChange,
+  autoComplete
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  autoComplete: string;
+}) {
+  return (
+    <label className="block rounded-soft border border-pink-100 bg-white p-4 shadow-sm focus-within:border-blossom">
+      <span className="mb-2 flex items-center gap-2 text-blossom">
+        <KeyRound size={18} aria-hidden="true" />
+        <span className="text-sm font-semibold text-zinc-500">{label}</span>
+      </span>
+      <input
+        suppressHydrationWarning
+        type="password"
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className="w-full border-0 bg-transparent p-0 font-bold text-ink outline-none"
+        placeholder="อย่างน้อย 6 ตัวอักษร"
+        autoComplete={autoComplete}
+      />
     </label>
   );
 }

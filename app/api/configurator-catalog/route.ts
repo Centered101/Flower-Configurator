@@ -82,6 +82,7 @@ export async function GET() {
 
   const catalog: ConfiguratorCatalog = {
     productTypes: (productTypes.data ?? []).map((item) => ({
+      databaseId: item.id,
       id: item.slug,
       name: item.name_th,
       description: item.description ?? "",
@@ -100,6 +101,7 @@ export async function GET() {
       } : undefined
     })),
     flowerTypes: (flowers.data ?? []).map((item) => ({
+      databaseId: item.id,
       id: item.slug,
       name: item.name_th,
       englishName: item.name_en,
@@ -186,7 +188,7 @@ export async function PUT(request: Request) {
     productTypeUpsertError = productUpsert.error;
 
     if (isMissingSchemaColumn(productUpsert.error, "image_url") && catalog.productTypes.some((item) => item.image?.url)) {
-      productTypeUpsertError = { message: "ฐานข้อมูลยังไม่มีคอลัมน์รูปตัวอย่างของประเภทสินค้า กรุณารัน supabase/schema.sql ก่อนบันทึกรูป" };
+      productTypeUpsertError = { message: "ยังบันทึกรูปตัวอย่างไม่ได้ กรุณาอัปเดตโครงสร้างฐานข้อมูลก่อน" };
     } else if (isMissingSchemaColumn(productUpsert.error, "image_url") || isMissingSchemaColumn(productUpsert.error, "image_tone")) {
       productTypeUpsertError = (await supabase.from("configurator_product_types").upsert(productTypes.map(({
         image_tone: _imageTone,

@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Copy, Eye, Loader2, RefreshCw, Search, Truck, XCircle } from "lucide-react";
+import { Copy, Download, Eye, Loader2, RefreshCw, Search, Truck, X, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import type { CustomerOrder, OrderStatus } from "@/lib/types";
 
@@ -32,6 +32,17 @@ type AdminOrder = {
   adminNote: string;
   quantity: number;
   orderTitle: string;
+  itemLink?: {
+    sourceType: string;
+    productId: string;
+    productName: string;
+    flowerTypeId: string;
+    flowerTypeName: string;
+    configProductType: string;
+    configFlowerType: string;
+    unitPrice: number;
+    lineTotal: number;
+  };
   latestPayment?: {
     id: string;
     amount: number;
@@ -118,6 +129,18 @@ function createDraft(order: AdminOrder): OrderDraft {
     trackingCarrier: order.trackingCarrier,
     trackingUrl: order.trackingUrl
   };
+}
+
+function getSourceTypeLabel(value?: string) {
+  if (value === "product") return "สินค้าสำเร็จรูป";
+  if (value === "gallery") return "ผลงานที่ผ่านมา";
+  return "ออกแบบเอง";
+}
+
+function formatLinkedValue(name: string, id: string) {
+  if (!id) return "ยังไม่ได้ผูก";
+  const shortId = id.length > 12 ? `${id.slice(0, 8)}...${id.slice(-4)}` : id;
+  return name ? `${name} (${shortId})` : shortId;
 }
 
 async function fetchOrders() {
@@ -306,7 +329,7 @@ export function OrderTable() {
         </div>
       ) : (
         <div className="rounded-bloom border border-pink-100 bg-white p-6 text-sm text-zinc-600 shadow-sm">
-          {orders.length ? "ไม่พบคำสั่งซื้อที่ค้นหา" : "ยังไม่มีออเดอร์ใน Supabase"}
+          {orders.length ? "ไม่พบคำสั่งซื้อที่ค้นหา" : "ยังไม่มีคำสั่งซื้อในระบบ"}
         </div>
       )}
     </section>
@@ -337,8 +360,16 @@ function OrderCard({
   onSave: () => void;
 }) {
   const phoneSuffix = order.phone.replace(/\D/g, "").slice(-4);
-  const hasSlip = Boolean(order.latestPayment?.slipUrl);
+  const [slipImageFailed, setSlipImageFailed] = useState(false);
+  const [isSlipPreviewOpen, setIsSlipPreviewOpen] = useState(false);
+  const hasSlipRecord = Boolean(order.latestPayment?.slipPath || order.latestPayment?.slipUrl);
+  const hasVisibleSlip = Boolean(order.latestPayment?.slipUrl) && !slipImageFailed;
   const shouldReviewSlip = order.paymentStatus === "awaiting_slip_review" || order.latestPayment?.status === "awaiting_review";
+
+  useEffect(() => {
+    setSlipImageFailed(false);
+    setIsSlipPreviewOpen(false);
+  }, [order.latestPayment?.slipUrl]);
 
   async function copyOrderNumber() {
     await navigator.clipboard.writeText(order.orderNumber);
@@ -399,6 +430,27 @@ function OrderCard({
               <Detail label="อีเมล" value={order.email || "-"} />
               <Detail label="สถานที่รับ/ส่ง" value={order.pickupLocation} />
               {order.customerNote ? <Detail label="หมายเหตุลูกค้า" value={order.customerNote} wide /> : null}
+            </div>
+
+            <div className="rounded-soft border border-pink-100 bg-white p-4">
+              <h3 className="font-bold text-ink">ข้อมูลที่เชื่อมกับรายการในร้าน</h3>
+              <dl className="mt-3 grid gap-3 text-sm md:grid-cols-2">
+                <Detail label="แหล่งที่มา" value={getSourceTypeLabel(order.itemLink?.sourceType)} />
+                <Detail
+                  label="สินค้าที่เชื่อมไว้"
+                  value={formatLinkedValue(order.itemLink?.productName ?? "", order.itemLink?.productId ?? "")}
+                />
+                <Detail
+                  label="ชนิดดอกไม้ที่เชื่อมไว้"
+                  value={formatLinkedValue(order.itemLink?.flowerTypeName ?? "", order.itemLink?.flowerTypeId ?? "")}
+                />
+                <Detail label="ประเภทหน้าออกแบบ" value={order.itemLink?.configProductType || "-"} />
+                <Detail label="ชนิดดอกไม้ที่ลูกค้าเลือก" value={order.itemLink?.configFlowerType || order.itemLink?.flowerTypeName || "-"} />
+                <Detail label="ราคาต่อรายการ" value={`${(order.itemLink?.lineTotal ?? order.total).toLocaleString("th-TH")} บาท`} />
+              </dl>
+              <p className="mt-3 text-xs font-semibold text-zinc-500">
+                ถ้าเป็นออเดอร์ออกแบบเอง ช่องสินค้าที่เชื่อมไว้อาจว่างได้ เพราะลูกค้าเลือกจากหน้าออกแบบ ส่วนออเดอร์เก่าจะขึ้นว่ายังไม่ได้เชื่อมจนกว่าจะมีการบันทึกใหม่
+              </p>
             </div>
 
             <div className="grid gap-3 md:grid-cols-2">
@@ -476,17 +528,42 @@ function OrderCard({
               ) : null}
             </div>
 
-            {hasSlip && order.latestPayment ? (
+            {order.latestPayment && order.latestPayment.slipUrl ? (
               <div className="mt-4">
-                <a href={order.latestPayment.slipUrl} target="_blank" rel="noreferrer" className="block overflow-hidden rounded-soft border border-pink-100 bg-blush">
+                <button
+                  type="button"
+                  suppressHydrationWarning
+                  onClick={() => setIsSlipPreviewOpen(true)}
+                  disabled={slipImageFailed}
+                  className="block w-full overflow-hidden rounded-soft border border-pink-100 bg-blush text-left transition hover:border-blossom disabled:cursor-not-allowed disabled:opacity-70"
+                  aria-label={`ดูรูปสลิป ${order.orderNumber}`}
+                >
                   <img
                     src={order.latestPayment.slipUrl}
                     alt={`สลิป ${order.orderNumber}`}
                     draggable={false}
                     onContextMenu={(event) => event.preventDefault()}
+                    onError={() => setSlipImageFailed(true)}
                     className="max-h-96 w-full select-none object-contain"
                   />
-                </a>
+                </button>
+                {slipImageFailed ? (
+                  <p className="mt-3 rounded-soft bg-yellow-50 p-3 text-sm font-semibold text-yellow-800">
+                    เปิดรูปสลิปไม่ได้ อาจเป็นลิงก์หมดอายุหรือไฟล์เดิมถูกลบ กรุณาให้ลูกค้าอัปโหลดสลิปใหม่ก่อนตรวจ
+                  </p>
+                ) : null}
+                {hasVisibleSlip ? (
+                  <a
+                    href={order.latestPayment.slipUrl}
+                    download={`slip-${order.orderNumber}.webp`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="touch-target mt-3 inline-flex w-full items-center justify-center gap-2 rounded-soft border border-pink-200 bg-white px-4 py-2 font-bold text-ink transition hover:border-blossom hover:bg-blush"
+                  >
+                    <Download size={17} aria-hidden="true" />
+                    ดาวน์โหลดสลิป
+                  </a>
+                ) : null}
                 <div className="mt-3 grid gap-2 text-sm">
                   <Detail label="เวลาที่อัปโหลด" value={formatDateTime(order.latestPayment.createdAt)} />
                   <Detail label="ยอดที่อ่านได้" value={order.latestPayment.verifiedAmount ? `${order.latestPayment.verifiedAmount.toLocaleString("th-TH")} บาท` : "-"} />
@@ -495,7 +572,9 @@ function OrderCard({
                 </div>
               </div>
             ) : (
-              <p className="mt-4 rounded-soft bg-blush/60 p-4 text-sm text-zinc-600">ลูกค้ายังไม่ได้อัปโหลดสลิปมัดจำ</p>
+              <p className="mt-4 rounded-soft bg-blush/60 p-4 text-sm text-zinc-600">
+                {hasSlipRecord ? "มีข้อมูลสลิปในระบบ แต่ยังสร้างลิงก์รูปสำหรับตรวจไม่ได้ กรุณาให้ลูกค้าอัปโหลดใหม่" : "ลูกค้ายังไม่ได้อัปโหลดสลิปมัดจำ"}
+              </p>
             )}
 
             <div className="mt-4 grid gap-2 sm:grid-cols-2">
@@ -503,7 +582,7 @@ function OrderCard({
                 type="button"
                 suppressHydrationWarning
                 onClick={onApprove}
-                disabled={disabled || !hasSlip || order.paymentStatus === "paid"}
+                disabled={disabled || !hasVisibleSlip || order.paymentStatus === "paid"}
                 className="touch-target rounded-soft bg-green-600 px-4 py-2 font-bold text-white transition hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 อนุมัติสลิป
@@ -512,7 +591,7 @@ function OrderCard({
                 type="button"
                 suppressHydrationWarning
                 onClick={onReject}
-                disabled={disabled || !hasSlip || order.paymentStatus === "paid"}
+                disabled={disabled || !hasVisibleSlip || order.paymentStatus === "paid"}
                 className="touch-target inline-flex items-center justify-center gap-2 rounded-soft bg-red-50 px-4 py-2 font-bold text-red-700 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <XCircle size={17} aria-hidden="true" />
@@ -520,6 +599,58 @@ function OrderCard({
               </button>
             </div>
           </aside>
+
+          {isSlipPreviewOpen && hasVisibleSlip && order.latestPayment ? (
+            <div
+              className="fixed inset-0 z-50 grid place-items-center bg-ink/70 p-4 backdrop-blur-sm"
+              role="dialog"
+              aria-modal="true"
+              aria-label={`ดูรูปสลิป ${order.orderNumber}`}
+              onClick={() => setIsSlipPreviewOpen(false)}
+            >
+              <div
+                className="w-full max-w-3xl rounded-bloom border border-pink-100 bg-white p-4 shadow-2xl"
+                onClick={(event) => event.stopPropagation()}
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-bold text-blossom">สลิปมัดจำ</p>
+                    <h3 className="break-all text-lg font-bold text-ink">{order.orderNumber}</h3>
+                  </div>
+                  <button
+                    type="button"
+                    suppressHydrationWarning
+                    onClick={() => setIsSlipPreviewOpen(false)}
+                    className="touch-target grid place-items-center rounded-full bg-blush text-ink transition hover:bg-blossom hover:text-white"
+                    aria-label="ปิดรูปสลิป"
+                  >
+                    <X size={20} aria-hidden="true" />
+                  </button>
+                </div>
+
+                <div className="mt-4 overflow-hidden rounded-soft border border-pink-100 bg-blush">
+                  <img
+                    src={order.latestPayment.slipUrl}
+                    alt={`สลิป ${order.orderNumber}`}
+                    draggable={false}
+                    onContextMenu={(event) => event.preventDefault()}
+                    className="max-h-[70vh] w-full select-none object-contain"
+                  />
+                </div>
+
+                <a
+                  href={order.latestPayment.slipUrl}
+                  download={`slip-${order.orderNumber}.webp`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="touch-target mt-4 inline-flex w-full items-center justify-center gap-2 rounded-soft bg-ink px-4 py-2 font-bold text-white transition hover:bg-blossom"
+                >
+                  <Download size={17} aria-hidden="true" />
+                  ดาวน์โหลดสลิป
+                </a>
+              </div>
+            </div>
+          ) : null}
         </div>
       ) : null}
     </article>

@@ -17,8 +17,8 @@ export type ConfiguratorMaterialLink = {
   quantityPerUnit: number;
 };
 
-export type EditableProductType = Omit<ProductType, "id"> & { id: string };
-export type EditableFlowerType = Omit<FlowerType, "id"> & { id: string };
+export type EditableProductType = Omit<ProductType, "id"> & { id: string; databaseId?: string };
+export type EditableFlowerType = Omit<FlowerType, "id"> & { id: string; databaseId?: string };
 export type EditableFlowerColor = Omit<FlowerColor, "id"> & { id: string };
 export type EditableStemOption = {
   strengths: Record<string, CatalogOption>;

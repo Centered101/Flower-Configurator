@@ -12,6 +12,7 @@ type ProfileRow = {
   first_name: string | null;
   last_name: string | null;
   phone: string | null;
+  line_id: string | null;
   address: string | null;
   created_at: string | null;
   updated_at: string | null;
@@ -116,7 +117,7 @@ function fulfillmentText(order: OrderRow) {
 async function getProfiles(supabase: ReturnType<typeof createSupabaseAdminClient>) {
   const { data, error } = await supabase
     .from("profiles")
-    .select("id, display_name, first_name, last_name, phone, address, created_at, updated_at");
+    .select("id, display_name, first_name, last_name, phone, line_id, address, created_at, updated_at");
 
   if (error) return [] as ProfileRow[];
   return (data ?? []) as ProfileRow[];
@@ -174,7 +175,7 @@ export async function GET() {
       const lastName = profile?.last_name?.trim() || asString(metadata.last_name);
       const email = input.user?.email?.trim() || order?.email?.trim() || "";
       const phone = profile?.phone?.trim() || asString(metadata.phone) || order?.phone?.trim() || "";
-      const lineId = asString(metadata.line_id) || asString(metadata.lineId) || order?.line_id?.trim() || "";
+      const lineId = profile?.line_id?.trim() || asString(metadata.line_id) || asString(metadata.lineId) || order?.line_id?.trim() || "";
       const address = profile?.address?.trim() || asString(metadata.address);
       const createdAt = input.user?.created_at ?? profile?.created_at ?? order?.created_at ?? "";
       const lastSignInAt = input.user?.last_sign_in_at ?? "";

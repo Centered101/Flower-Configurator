@@ -1,6 +1,7 @@
 -- ไฟล์นี้ใช้สำหรับ insert/upsert ข้อมูลเริ่มต้นลงตารางเท่านั้น
--- ระบบไม่ใส่ข้อมูลสินค้า สี ก้าน การจัดช่อ หรือผลงานตัวอย่างไว้ล่วงหน้า
--- ให้เพิ่มข้อมูลจริงผ่านหน้า admin เพื่อหลีกเลี่ยง hardcoded mock data
+-- ค่าเริ่มต้นที่เปิดใช้จริงคือผู้ดูแลร้านคนแรก เพื่อให้เข้า admin ได้หลังติดตั้ง
+-- ระบบไม่ใส่สินค้า สี ก้าน การจัดช่อ หรือผลงานจริงไว้ล่วงหน้า
+-- ให้เพิ่มข้อมูลร้านจริงผ่านหน้า admin เพื่อหลีกเลี่ยง hardcoded mock data
 
 -- ผู้ดูแลร้านคนแรก:
 --   username: admin
@@ -27,6 +28,7 @@ insert into public.admin_users (
   updated_at = now();
 
 -- ตัวอย่างสำหรับเพิ่มข้อมูลจริงในอนาคต:
+-- ใช้เป็นแนวทางเท่านั้น ถ้าไม่ต้องการ seed ข้อมูลสินค้า ให้เพิ่มผ่านหน้า admin/products
 -- insert into public.products (slug, name, description, base_price, base_quantity)
 -- values ('your-real-product-slug', 'ชื่อสินค้าจริง', 'รายละเอียดสินค้าจริง', 0, 1)
 -- on conflict (slug) do update set
@@ -36,6 +38,7 @@ insert into public.admin_users (
 --   base_quantity = excluded.base_quantity;
 
 -- ตัวเลือกประเภทสินค้าสำหรับหน้าออกแบบ ให้เก็บแยกจาก public.products:
+-- ถ้าไม่ต้องการ seed ตัวเลือกหน้าออกแบบ ให้เพิ่มผ่านหน้า admin/configurator
 -- insert into public.configurator_product_types (
 --   slug, name_th, description, base_price, base_quantity, production_score, production_days, image_url, image_path, image_width, image_height, image_format, image_size, sort_order
 -- ) values (
@@ -55,6 +58,6 @@ insert into public.admin_users (
 --   image_size = excluded.image_size,
 --   sort_order = excluded.sort_order;
 
--- ตัวอย่างสต็อกวัสดุ
--- รันซ้ำได้ เพราะใช้ id คงที่และ on conflict
--- หลังรันแล้วสามารถแก้ไข/ลบ/เพิ่มของจริงได้จากหน้า admin/materials
+-- ตัวอย่างสต็อกวัสดุ:
+-- ให้เพิ่มวัสดุจริงผ่านหน้า admin/materials แล้วค่อยเชื่อมวัสดุกับตัวเลือกในหน้า admin/configurator
+-- ถ้าต้องการ seed วัสดุ สามารถเพิ่ม insert into public.materials (...) ในไฟล์นี้ได้

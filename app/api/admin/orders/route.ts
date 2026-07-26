@@ -58,10 +58,24 @@ type OrderRow = {
 
 type OrderItemRow = {
   order_id: string;
+  product_id: string | null;
+  flower_type_id: string | null;
   quantity: number | string | null;
   unit_price: number | string | null;
   line_total: number | string | null;
   customization_json: unknown;
+};
+
+type ProductRow = {
+  id: string;
+  name: string | null;
+};
+
+type FlowerTypeRow = {
+  id: string;
+  slug: string | null;
+  name_th: string | null;
+  name_en: string | null;
 };
 
 type PaymentRow = {
@@ -107,6 +121,17 @@ type AdminOrder = {
   adminNote: string;
   quantity: number;
   orderTitle: string;
+  itemLink?: {
+    sourceType: string;
+    productId: string;
+    productName: string;
+    flowerTypeId: string;
+    flowerTypeName: string;
+    configProductType: string;
+    configFlowerType: string;
+    unitPrice: number;
+    lineTotal: number;
+  };
   sourceItem?: unknown;
   latestPayment?: {
     id: string;
@@ -152,7 +177,45 @@ function getOrderTitle(item?: OrderItemRow) {
   return "ออเดอร์ออกแบบเอง";
 }
 
-async function mapOrder(row: OrderRow, item?: OrderItemRow, payment?: PaymentRow): Promise<AdminOrder> {
+function getStringField(record: Record<string, unknown>, key: string) {
+  const value = record[key];
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function getItemLink(
+  item: OrderItemRow | undefined,
+  productById: Map<string, ProductRow>,
+  flowerById: Map<string, FlowerTypeRow>
+): AdminOrder["itemLink"] | undefined {
+  if (!item) return undefined;
+
+  const json = isRecord(item.customization_json) ? item.customization_json : {};
+  const config = isRecord(json.config) ? json.config : {};
+  const sourceItem = isRecord(json.sourceItem) ? json.sourceItem : {};
+  const sourceType = getStringField(sourceItem, "sourceType") || (item.product_id ? "product" : "custom");
+  const product = item.product_id ? productById.get(item.product_id) : undefined;
+  const flower = item.flower_type_id ? flowerById.get(item.flower_type_id) : undefined;
+
+  return {
+    sourceType,
+    productId: item.product_id ?? "",
+    productName: product?.name?.trim() ?? "",
+    flowerTypeId: item.flower_type_id ?? "",
+    flowerTypeName: flower?.name_th?.trim() || flower?.name_en?.trim() || flower?.slug?.trim() || "",
+    configProductType: getStringField(config, "productType"),
+    configFlowerType: getStringField(config, "flowerType"),
+    unitPrice: toNumber(item.unit_price),
+    lineTotal: toNumber(item.line_total)
+  };
+}
+
+async function mapOrder(
+  row: OrderRow,
+  item: OrderItemRow | undefined,
+  payment: PaymentRow | undefined,
+  productById: Map<string, ProductRow>,
+  flowerById: Map<string, FlowerTypeRow>
+): Promise<AdminOrder> {
   const json = isRecord(item?.customization_json) ? item.customization_json : {};
   const slipUrl = payment ? await createPaymentSlipDisplayUrl({
     slipPath: payment.slip_path,
@@ -185,6 +248,7 @@ async function mapOrder(row: OrderRow, item?: OrderItemRow, payment?: PaymentRow
     adminNote: row.admin_note ?? "",
     quantity: Math.max(1, toNumber(item?.quantity, 1)),
     orderTitle: getOrderTitle(item),
+    itemLink: getItemLink(item, productById, flowerById),
     sourceItem: isRecord(json) ? json.sourceItem : undefined,
     latestPayment: payment ? {
       id: payment.id,
@@ -235,7 +299,7 @@ export async function GET() {
     const [itemsResult, paymentsResult] = orderIds.length ? await Promise.all([
       supabase
         .from("order_items")
-        .select("order_id, quantity, unit_price, line_total, customization_json")
+        .select("order_id, product_id, flower_type_id, quantity, unit_price, line_total, customization_json")
         .in("order_id", orderIds),
       supabase
         .from("payment_records")
@@ -256,16 +320,41 @@ export async function GET() {
     }
 
     const itemByOrderId = new Map<string, OrderItemRow>();
-    for (const item of (itemsResult.data ?? []) as OrderItemRow[]) {
+    const itemRows = (itemsResult.data ?? []) as OrderItemRow[];
+    for (const item of itemRows) {
       if (!itemByOrderId.has(item.order_id)) itemByOrderId.set(item.order_id, item);
     }
+
+    const productIds = Array.from(new Set(itemRows.map((item) => item.product_id).filter((id): id is string => Boolean(id))));
+    const flowerIds = Array.from(new Set(itemRows.map((item) => item.flower_type_id).filter((id): id is string => Boolean(id))));
+    const [productsResult, flowersResult] = await Promise.all([
+      productIds.length ? supabase.from("products").select("id, name").in("id", productIds) : Promise.resolve({ data: [], error: null }),
+      flowerIds.length ? supabase.from("flower_types").select("id, slug, name_th, name_en").in("id", flowerIds) : Promise.resolve({ data: [], error: null })
+    ]);
+
+    if (productsResult.error) {
+      return NextResponse.json({ error: productsResult.error.message }, { status: 500 });
+    }
+
+    if (flowersResult.error) {
+      return NextResponse.json({ error: flowersResult.error.message }, { status: 500 });
+    }
+
+    const productById = new Map(((productsResult.data ?? []) as ProductRow[]).map((product) => [product.id, product]));
+    const flowerById = new Map(((flowersResult.data ?? []) as FlowerTypeRow[]).map((flower) => [flower.id, flower]));
 
     const paymentByOrderId = new Map<string, PaymentRow>();
     for (const payment of (paymentsResult.data ?? []) as PaymentRow[]) {
       if (!paymentByOrderId.has(payment.order_id)) paymentByOrderId.set(payment.order_id, payment);
     }
 
-    const mappedOrders = await Promise.all(orderRows.map((order) => mapOrder(order, itemByOrderId.get(order.id), paymentByOrderId.get(order.id))));
+    const mappedOrders = await Promise.all(orderRows.map((order) => mapOrder(
+      order,
+      itemByOrderId.get(order.id),
+      paymentByOrderId.get(order.id),
+      productById,
+      flowerById
+    )));
 
     return NextResponse.json(mappedOrders, {
       headers: {

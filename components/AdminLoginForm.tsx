@@ -63,7 +63,7 @@ export function AdminLoginForm({ redirectTo }: { redirectTo: string }) {
           </div>
           <HelpTooltip
             title="เข้าสู่ระบบผู้ดูแล"
-            content="ใช้ username และ password ของผู้ดูแลร้าน แยกจากบัญชีลูกค้า Supabase"
+            content="ใช้ชื่อผู้ใช้และรหัสผ่านของผู้ดูแลร้าน แยกจากบัญชีลูกค้า"
             side="left"
           />
         </div>

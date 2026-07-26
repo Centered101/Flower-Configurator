@@ -113,7 +113,7 @@ export function FulfillmentSettingsForm() {
           <div className="flex items-center gap-2 font-bold text-ink">
             <Clock3 size={18} className="text-blossom" />
             เวลาที่ลูกค้าเลือกได้
-            <HelpTooltip content="เวลานี้จะแสดงในหน้า checkout เฉพาะวิธีรับสินค้าที่ต้องเลือกเวลา เช่น รับที่ร้านหรือรับที่โรงเรียน" />
+            <HelpTooltip content="เวลานี้จะแสดงในหน้าสั่งซื้อ เฉพาะวิธีรับสินค้าที่ต้องเลือกเวลา เช่น รับที่ร้านหรือรับที่โรงเรียน" />
           </div>
           <div className="mt-3 flex flex-wrap gap-2">
             {settings.pickupTimeSlots.map((slot) => (
@@ -170,7 +170,7 @@ export function FulfillmentSettingsForm() {
                 </label>
                 <div className="flex shrink-0 items-center gap-2">
                   <HelpTooltip
-                    content={method.id === "delivery" ? "การจัดส่งไม่ต้องเลือกวันรับ ระบบจะคำนวณวันจัดส่งโดยประมาณจากคิวผลิตและจำนวนวันที่เผื่อจัดส่ง" : "ถ้าเปิดใช้งาน ลูกค้าจะเห็นตัวเลือกนี้ในหน้า checkout"}
+                    content={method.id === "delivery" ? "การจัดส่งไม่ต้องเลือกวันรับ ระบบจะคำนวณวันจัดส่งโดยประมาณจากคิวผลิตและจำนวนวันที่เผื่อจัดส่ง" : "ถ้าเปิดใช้งาน ลูกค้าจะเห็นตัวเลือกนี้ในหน้าสั่งซื้อ"}
                     side="left"
                   />
                   <span className="rounded-full bg-blush px-3 py-1 text-xs font-bold text-blossom">
@@ -234,7 +234,7 @@ export function FulfillmentSettingsForm() {
           />
           <TextField
             label="ข้อความสำหรับจัดส่ง"
-            help="ข้อความนี้จะแสดงในหน้า checkout เมื่อลูกค้าเลือกจัดส่ง"
+            help="ข้อความนี้จะแสดงในหน้าสั่งซื้อ เมื่อลูกค้าเลือกจัดส่ง"
             value={settings.deliveryNote}
             onChange={(value) => setSettings((current) => ({ ...current, deliveryNote: value }))}
           />

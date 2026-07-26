@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import { Globe2, Save, Search, Share2, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 import { HelpTooltip } from "@/components/HelpTooltip";
+import { ImageUploader } from "@/components/ImageUploader";
+import type { ProcessedImage } from "@/lib/image-processing";
 
 type SeoSettings = {
   siteTitle: string;
@@ -54,8 +56,8 @@ export function SeoSettingsForm() {
       .then((response) => response.json())
       .then((data: SeoSettings) => setSettings({ ...emptySettings, ...data }))
       .catch(() => {
-        setError("โหลดการตั้งค่า Meta Tags ไม่สำเร็จ");
-        toast.error("โหลดการตั้งค่า Meta Tags ไม่สำเร็จ");
+        setError("โหลดการตั้งค่าหน้าเว็บไม่สำเร็จ");
+        toast.error("โหลดการตั้งค่าหน้าเว็บไม่สำเร็จ");
       });
   }, []);
 
@@ -74,18 +76,27 @@ export function SeoSettingsForm() {
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.error ?? "บันทึก Meta Tags ไม่สำเร็จ");
+        throw new Error(data.error ?? "บันทึกการตั้งค่าหน้าเว็บไม่สำเร็จ");
       }
 
       setSettings({ ...emptySettings, ...(data as SeoSettings) });
-      toast.success("บันทึก Meta Tags แล้ว");
+      toast.success("บันทึกการตั้งค่าหน้าเว็บแล้ว");
     } catch (saveError) {
-      const message = saveError instanceof Error ? saveError.message : "บันทึก Meta Tags ไม่สำเร็จ";
+      const message = saveError instanceof Error ? saveError.message : "บันทึกการตั้งค่าหน้าเว็บไม่สำเร็จ";
       setError(message);
       toast.error(message);
     } finally {
       setIsSaving(false);
     }
+  }
+
+  function useUploadedShareImage(image: ProcessedImage) {
+    setSettings((current) => ({
+      ...current,
+      ogImageUrl: image.url,
+      twitterImageUrl: current.twitterImageUrl || image.url
+    }));
+    toast.info("ใส่รูปเวลาแชร์ลิงก์แล้ว อย่าลืมกดบันทึกการตั้งค่า");
   }
 
   return (
@@ -96,14 +107,14 @@ export function SeoSettingsForm() {
         </span>
         <div className="min-w-0">
           <div className="flex items-center gap-2">
-            <h2 className="text-lg font-bold text-ink">SEO และ Meta Tags</h2>
+            <h2 className="text-lg font-bold text-ink">ข้อมูลค้นหาและแชร์ลิงก์</h2>
             <HelpTooltip
-              title="SEO และ Meta Tags"
-              content="ใช้กำหนดชื่อเว็บ คำอธิบาย รูปตอนแชร์ลิงก์ และสี theme ของ browser เพื่อให้เว็บอ่านง่ายใน Google และ social preview"
+              title="ข้อมูลค้นหาและแชร์ลิงก์"
+              content="ใช้กำหนดชื่อเว็บ คำอธิบาย รูปตอนแชร์ลิงก์ และสีแถบบราวเซอร์ เพื่อให้เว็บดูดีใน Google และตอนแชร์ลิงก์"
             />
           </div>
           <p className="mt-1 text-sm leading-6 text-zinc-600">
-            ใช้กับ Google, Meta Tags Toolkit, Open Graph, Twitter Card และสีแถบบราวเซอร์
+            ตั้งค่าชื่อเว็บ คำอธิบาย รูปตอนแชร์ลิงก์ และสีแถบบราวเซอร์
           </p>
         </div>
       </div>
@@ -116,14 +127,14 @@ export function SeoSettingsForm() {
                 label="ชื่อเว็บไซต์"
                 value={settings.siteTitle}
                 maxHint={60}
-                help="ข้อความหลักที่แสดงบนแท็บ browser และผลค้นหา Google"
+                help="ข้อความหลักที่แสดงบนแท็บเว็บและผลค้นหา Google"
                 onChange={(value) => setSettings((current) => updateField(current, "siteTitle", value))}
               />
               <TextField
-                label="Site URL"
+                label="ลิงก์เว็บไซต์"
                 value={settings.siteUrl}
                 placeholder="https://example.com"
-                help="โดเมนจริงของเว็บ ใช้สร้าง canonical และรูปแชร์ลิงก์ให้ถูก URL"
+                help="โดเมนจริงของเว็บ ใช้ทำลิงก์หลักและรูปตอนแชร์ลิงก์ให้ถูกต้อง"
                 onChange={(value) => setSettings((current) => updateField(current, "siteUrl", value))}
               />
             </div>
@@ -137,25 +148,25 @@ export function SeoSettingsForm() {
             />
 
             <TextareaField
-              label="Keywords คั่นด้วยเครื่องหมาย comma"
+              label="คำค้น คั่นด้วยเครื่องหมาย ,"
               value={settings.siteKeywords}
               placeholder="ดอกไม้ลวดกำมะหยี่, พรีออเดอร์ดอกไม้, ออกแบบดอกไม้"
-              help="คำค้นที่เกี่ยวกับร้าน คั่นด้วย comma ไม่ต้องใส่เยอะเกินไป"
+              help="คำค้นที่เกี่ยวกับร้าน คั่นด้วยเครื่องหมาย , ไม่ต้องใส่เยอะเกินไป"
               onChange={(value) => setSettings((current) => updateField(current, "siteKeywords", value))}
             />
 
             <div className="grid gap-4 lg:grid-cols-[1fr_180px]">
               <TextField
-                label="Canonical URL หรือ path"
+                label="ลิงก์หลักของหน้า"
                 value={settings.canonicalPath}
                 placeholder="/"
-                help="URL หลักของหน้า ถ้าไม่แน่ใจให้ใช้ / สำหรับหน้าแรก"
+                help="ลิงก์หลักของหน้า ถ้าไม่แน่ใจให้ใช้ / สำหรับหน้าแรก"
                 onChange={(value) => setSettings((current) => updateField(current, "canonicalPath", value))}
               />
               <div className="block">
                 <div className="mb-1 flex items-center gap-2 text-sm font-semibold text-ink">
-                  Theme color
-                  <HelpTooltip content="สีหลักของ browser/tab ในมือถือ และเป็นสี meta theme-color ของเว็บไซต์" />
+                  สีแถบบราวเซอร์
+                  <HelpTooltip content="สีหลักที่มือถือใช้แสดงบนแถบของเว็บไซต์" />
                 </div>
                 <div className="flex items-center gap-2 rounded-soft border border-pink-100 bg-white px-3">
                   <input
@@ -164,11 +175,11 @@ export function SeoSettingsForm() {
                     value={settings.themeColor}
                     onChange={(event) => setSettings((current) => updateField(current, "themeColor", event.target.value.toUpperCase()))}
                     className="size-9 shrink-0 rounded-full border-0 bg-transparent p-0"
-                    aria-label="เลือกสี Theme color"
+                    aria-label="เลือกสีแถบบราวเซอร์"
                   />
                   <input
                     suppressHydrationWarning
-                    aria-label="รหัสสี Theme color"
+                    aria-label="รหัสสีแถบบราวเซอร์"
                     value={settings.themeColor}
                     onChange={(event) => setSettings((current) => updateField(current, "themeColor", event.target.value.toUpperCase()))}
                     className="touch-target min-w-0 flex-1 border-0 bg-transparent font-bold text-ink outline-none"
@@ -196,10 +207,10 @@ export function SeoSettingsForm() {
                   type="checkbox"
                   checked={settings.robotsFollow}
                   onChange={(event) => setSettings((current) => updateField(current, "robotsFollow", event.target.checked))}
-                  aria-label="ให้ bot ตามลิงก์ในเว็บ"
+                  aria-label="ให้ระบบค้นหาตามลิงก์ในเว็บ"
                 />
-                ให้ bot ตามลิงก์ในเว็บ
-                <HelpTooltip content="ถ้าปิด bot จะถูกบอกว่าไม่ควรตามลิงก์จากหน้านี้ไปหน้าอื่น" />
+                ให้ระบบค้นหาตามลิงก์ในเว็บ
+                <HelpTooltip content="ถ้าปิด ระบบค้นหาจะถูกบอกว่าไม่ควรตามลิงก์จากหน้านี้ไปหน้าอื่น" />
               </div>
             </div>
 
@@ -209,15 +220,27 @@ export function SeoSettingsForm() {
                 ข้อมูลตอนแชร์ลิงก์
               </div>
               <div className="grid gap-4 lg:grid-cols-2">
-                <TextField label="Open Graph Title" value={settings.ogTitle} maxHint={60} help="ชื่อที่แสดงเมื่อแชร์ลิงก์ใน LINE, Facebook หรือแอปอื่น" onChange={(value) => setSettings((current) => updateField(current, "ogTitle", value))} />
-                <TextField label="Open Graph Image" value={settings.ogImageUrl} placeholder="/favicon.png หรือ https://..." help="รูปตัวอย่างเมื่อแชร์ลิงก์ แนะนำ 1200x630 px" onChange={(value) => setSettings((current) => updateField(current, "ogImageUrl", value))} />
+                <TextField label="ชื่อเวลาแชร์ลิงก์" value={settings.ogTitle} maxHint={60} help="ชื่อที่แสดงเมื่อแชร์ลิงก์ใน LINE, Facebook หรือแอปอื่น" onChange={(value) => setSettings((current) => updateField(current, "ogTitle", value))} />
+                <TextField label="รูปเวลาแชร์ลิงก์" value={settings.ogImageUrl} placeholder="/favicon.png หรือ https://..." help="รูปตัวอย่างเมื่อแชร์ลิงก์ แนะนำ 1200x630 px" onChange={(value) => setSettings((current) => updateField(current, "ogImageUrl", value))} />
               </div>
-              <TextareaField label="Open Graph Description" value={settings.ogDescription} maxHint={160} help="คำอธิบายที่แสดงใต้ชื่อเมื่อแชร์ลิงก์" onChange={(value) => setSettings((current) => updateField(current, "ogDescription", value))} />
+              <div className="rounded-soft border border-pink-100 bg-blush/35 p-4">
+                <ImageUploader
+                  bucket="gallery-images"
+                  folder="seo"
+                  title="อัปโหลดรูปเวลาแชร์ลิงก์"
+                  help="ใช้รูปนี้ตอนแชร์ลิงก์เว็บใน LINE, Facebook หรือแอปอื่น แนะนำสัดส่วน 1200x630 px"
+                  onUploaded={useUploadedShareImage}
+                />
+                <p className="mt-3 text-xs font-semibold text-zinc-500">
+                  หลังอัปโหลดสำเร็จ ระบบจะใส่ลิงก์รูปให้ด้านบน แล้วกดบันทึกการตั้งค่าเพื่อใช้งานจริง
+                </p>
+              </div>
+              <TextareaField label="คำอธิบายเวลาแชร์ลิงก์" value={settings.ogDescription} maxHint={160} help="คำอธิบายที่แสดงใต้ชื่อเมื่อแชร์ลิงก์" onChange={(value) => setSettings((current) => updateField(current, "ogDescription", value))} />
               <div className="grid gap-4 lg:grid-cols-2">
-                <TextField label="Twitter Title" value={settings.twitterTitle} maxHint={60} help="ชื่อที่แสดงใน Twitter/X Card" onChange={(value) => setSettings((current) => updateField(current, "twitterTitle", value))} />
-                <TextField label="Twitter Image" value={settings.twitterImageUrl} placeholder="/favicon.png หรือ https://..." help="รูปสำหรับ Twitter/X Card ถ้าไม่ใส่จะใช้ Open Graph Image" onChange={(value) => setSettings((current) => updateField(current, "twitterImageUrl", value))} />
+                <TextField label="ชื่อเวลาแชร์ใน X" value={settings.twitterTitle} maxHint={60} help="ชื่อที่แสดงเมื่อแชร์ลิงก์ใน X" onChange={(value) => setSettings((current) => updateField(current, "twitterTitle", value))} />
+                <TextField label="รูปเวลาแชร์ใน X" value={settings.twitterImageUrl} placeholder="/favicon.png หรือ https://..." help="รูปสำหรับแชร์ใน X ถ้าไม่ใส่จะใช้รูปเวลาแชร์ลิงก์" onChange={(value) => setSettings((current) => updateField(current, "twitterImageUrl", value))} />
               </div>
-              <TextareaField label="Twitter Description" value={settings.twitterDescription} maxHint={160} help="คำอธิบายสำหรับ Twitter/X Card" onChange={(value) => setSettings((current) => updateField(current, "twitterDescription", value))} />
+              <TextareaField label="คำอธิบายเวลาแชร์ใน X" value={settings.twitterDescription} maxHint={160} help="คำอธิบายสำหรับแชร์ลิงก์ใน X" onChange={(value) => setSettings((current) => updateField(current, "twitterDescription", value))} />
             </section>
           </div>
 
@@ -234,12 +257,22 @@ export function SeoSettingsForm() {
             </div>
 
             <div className="overflow-hidden rounded-soft border border-pink-100 bg-white shadow-sm">
-              <div className="grid aspect-[1.91/1] place-items-center bg-blush text-sm font-bold text-blossom">
-                {settings.ogImageUrl ? "รูปแชร์ลิงก์" : "ยังไม่ได้ใส่รูปแชร์"}
+              <div className="aspect-[1.91/1] overflow-hidden bg-blush">
+                {settings.ogImageUrl ? (
+                  <img
+                    src={settings.ogImageUrl}
+                    alt="รูปตัวอย่างเวลาแชร์ลิงก์"
+                    draggable={false}
+                    onContextMenu={(event) => event.preventDefault()}
+                    className="h-full w-full select-none object-cover"
+                  />
+                ) : (
+                  <div className="grid h-full place-items-center text-sm font-bold text-blossom">ยังไม่ได้ใส่รูปแชร์</div>
+                )}
               </div>
               <div className="p-4">
-                <p className="text-sm font-bold text-ink">{settings.ogTitle || settings.siteTitle || "Open Graph Title"}</p>
-                <p className="mt-1 text-xs leading-5 text-zinc-600">{settings.ogDescription || settings.siteDescription || "Open Graph Description"}</p>
+                <p className="text-sm font-bold text-ink">{settings.ogTitle || settings.siteTitle || "ชื่อเวลาแชร์ลิงก์"}</p>
+                <p className="mt-1 text-xs leading-5 text-zinc-600">{settings.ogDescription || settings.siteDescription || "คำอธิบายเวลาแชร์ลิงก์"}</p>
               </div>
             </div>
 
@@ -262,7 +295,7 @@ export function SeoSettingsForm() {
           className="touch-target inline-flex items-center justify-center gap-2 rounded-soft bg-blossom px-4 py-2 font-bold text-white disabled:opacity-50"
         >
           <Save size={18} />
-          {isSaving ? "กำลังบันทึก..." : "บันทึก Meta Tags"}
+          {isSaving ? "กำลังบันทึก..." : "บันทึกการตั้งค่า"}
         </button>
       </fieldset>
     </section>

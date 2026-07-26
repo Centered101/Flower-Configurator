@@ -7,13 +7,16 @@ import { toast } from "sonner";
 import { EmptyState } from "@/components/EmptyState";
 import { HelpTooltip } from "@/components/HelpTooltip";
 import { ImageUploader } from "@/components/ImageUploader";
-import { ADMIN_GALLERY_KEY, deleteAdminGalleryItem, fetchAdminGalleryItems, persistAdminGalleryItem, readAdminItems, saveAdminItems, type AdminGalleryItem } from "@/lib/admin-data";
+import { ADMIN_GALLERY_KEY, deleteAdminGalleryItem, fetchAdminGalleryItems, fetchAdminProducts, persistAdminGalleryItem, readAdminItems, saveAdminItems, type AdminGalleryItem, type AdminProduct } from "@/lib/admin-data";
+import { fetchConfiguratorCatalog, type ConfiguratorCatalog } from "@/lib/configurator-catalog";
 import type { ProcessedImage } from "@/lib/image-processing";
 
 export function AdminGalleryManager() {
   const [items, setItems] = useState<AdminGalleryItem[]>([]);
   const [image, setImage] = useState<ProcessedImage | undefined>();
-  const [form, setForm] = useState({ title: "", flower: "", color: "", size: "", price: "", productionScore: "" });
+  const [form, setForm] = useState({ title: "", productId: "", flowerTypeId: "", flower: "", color: "", size: "", price: "", productionScore: "" });
+  const [products, setProducts] = useState<AdminProduct[]>([]);
+  const [flowerTypes, setFlowerTypes] = useState<ConfiguratorCatalog["flowerTypes"]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [detailId, setDetailId] = useState<string | null>(null);
   const [uploaderKey, setUploaderKey] = useState(0);
@@ -30,12 +33,23 @@ export function AdminGalleryManager() {
       })
       .catch((error) => {
         setItems(localItems);
-        toast.error(error instanceof Error ? error.message : "โหลดผลงานจาก Supabase ไม่สำเร็จ");
+        toast.error(error instanceof Error ? error.message : "โหลดผลงานจากระบบไม่สำเร็จ");
+      });
+  }, []);
+
+  useEffect(() => {
+    Promise.all([fetchAdminProducts(), fetchConfiguratorCatalog()])
+      .then(([nextProducts, catalog]) => {
+        setProducts(nextProducts);
+        setFlowerTypes(catalog.flowerTypes);
+      })
+      .catch((error) => {
+        toast.error(error instanceof Error ? error.message : "โหลดรายการสินค้าและชนิดดอกไม้ไม่สำเร็จ");
       });
   }, []);
 
   function resetForm() {
-    setForm({ title: "", flower: "", color: "", size: "", price: "", productionScore: "" });
+    setForm({ title: "", productId: "", flowerTypeId: "", flower: "", color: "", size: "", price: "", productionScore: "" });
     setImage(undefined);
     setEditingId(null);
     setUploaderKey((current) => current + 1);
@@ -47,6 +61,8 @@ export function AdminGalleryManager() {
     setDetailId(item.id);
     setForm({
       title: item.title,
+      productId: item.productId ?? "",
+      flowerTypeId: item.flowerTypeId ?? "",
       flower: item.flower,
       color: item.color,
       size: item.size,
@@ -68,6 +84,8 @@ export function AdminGalleryManager() {
     const galleryItem: AdminGalleryItem = {
       id: editingId ?? crypto.randomUUID(),
       title: form.title.trim(),
+      productId: form.productId || undefined,
+      flowerTypeId: form.flowerTypeId || undefined,
       flower: form.flower.trim(),
       color: form.color.trim(),
       size: form.size.trim(),
@@ -151,6 +169,23 @@ export function AdminGalleryManager() {
           ) : null}
           <ImageUploader key={uploaderKey} bucket="gallery-images" folder="gallery" onUploaded={setImage} />
           <Input label="ชื่อผลงาน" value={form.title} onChange={(value) => setForm({ ...form, title: value })} />
+          <Select
+            label="เชื่อมกับสินค้า"
+            help="เลือกสินค้าที่เกี่ยวข้องกับผลงานนี้ ถ้าไม่เกี่ยวกับสินค้าใดให้เว้นว่าง"
+            value={form.productId}
+            onChange={(value) => setForm({ ...form, productId: value })}
+            options={products.map((product) => ({ value: product.id, label: product.name }))}
+          />
+          <Select
+            label="เชื่อมกับชนิดดอกไม้"
+            help="เลือกชนิดดอกไม้ที่ใช้กับผลงานนี้ เพื่อช่วยเติมข้อมูลตอนลูกค้าสั่งซื้อ"
+            value={form.flowerTypeId}
+            onChange={(value) => {
+              const flowerType = flowerTypes.find((item) => item.databaseId === value);
+              setForm({ ...form, flowerTypeId: value, flower: flowerType?.name ?? form.flower });
+            }}
+            options={flowerTypes.map((item) => ({ value: item.databaseId ?? "", label: item.name })).filter((item) => item.value)}
+          />
           <Input label="ชนิดดอกไม้" value={form.flower} onChange={(value) => setForm({ ...form, flower: value })} />
           <Input label="สี" value={form.color} onChange={(value) => setForm({ ...form, color: value })} />
           <Input label="ขนาดช่อ" value={form.size} onChange={(value) => setForm({ ...form, size: value })} />
@@ -185,6 +220,7 @@ export function AdminGalleryManager() {
                   <p className="mt-1 text-sm text-zinc-600">{[item.flower, item.color, item.size].filter(Boolean).join(" / ") || "ไม่มีรายละเอียด"}</p>
                   <p className="mt-2 text-sm font-semibold text-blossom">{item.price.toLocaleString("th-TH")} บาท / {Math.max(1, Number(item.productionScore ?? 1)).toLocaleString("th-TH")} คะแนน</p>
                   {item.image ? <p className="mt-1 text-xs text-zinc-500">มีรูปผลงานแล้ว</p> : null}
+                  {item.productId || item.flowerTypeId ? <p className="mt-1 text-xs font-semibold text-zinc-500">เชื่อมสินค้า/ชนิดดอกไม้แล้ว</p> : null}
                 </div>
               </div>
               <div className="flex shrink-0 flex-wrap justify-end gap-2">
@@ -234,6 +270,8 @@ export function AdminGalleryManager() {
                   <Detail label="ชื่อผลงาน" value={item.title} />
                   <Detail label="ราคา" value={`${item.price.toLocaleString("th-TH")} บาท`} />
                   <Detail label="คะแนนการผลิต" value={`${Math.max(1, Number(item.productionScore ?? 1)).toLocaleString("th-TH")} คะแนน`} />
+                  <Detail label="สินค้าที่เชื่อมไว้" value={getLinkedProductName(products, item.productId)} />
+                  <Detail label="ชนิดดอกไม้ที่เชื่อมไว้" value={getLinkedFlowerName(flowerTypes, item.flowerTypeId)} />
                   <Detail label="รายละเอียด" value={[item.flower, item.color, item.size].filter(Boolean).join(" / ") || "ไม่มีรายละเอียด"} wide />
                   {item.image ? (
                     <>
@@ -250,6 +288,16 @@ export function AdminGalleryManager() {
       </section>
     </fieldset>
   );
+}
+
+function getLinkedProductName(products: AdminProduct[], productId?: string) {
+  if (!productId) return "ยังไม่ได้เชื่อม";
+  return products.find((product) => product.id === productId)?.name ?? productId;
+}
+
+function getLinkedFlowerName(flowerTypes: ConfiguratorCatalog["flowerTypes"], flowerTypeId?: string) {
+  if (!flowerTypeId) return "ยังไม่ได้เชื่อม";
+  return flowerTypes.find((flower) => flower.databaseId === flowerTypeId)?.name ?? flowerTypeId;
 }
 
 function Detail({ label, value, wide = false }: { label: string; value: string; wide?: boolean }) {
@@ -269,6 +317,41 @@ function Input({ label, help, value, onChange, type = "text" }: { label: string;
         {help ? <HelpTooltip content={help} /> : null}
       </div>
       <input suppressHydrationWarning aria-label={label} type={type} value={value} onChange={(event) => onChange(event.target.value)} className="touch-target w-full rounded-soft border border-pink-100 px-3" />
+    </div>
+  );
+}
+
+function Select({
+  label,
+  help,
+  value,
+  onChange,
+  options
+}: {
+  label: string;
+  help?: string;
+  value: string;
+  onChange: (value: string) => void;
+  options: Array<{ value: string; label: string }>;
+}) {
+  return (
+    <div className="block">
+      <div className="mb-1 flex items-center gap-2 text-sm font-semibold text-ink">
+        {label}
+        {help ? <HelpTooltip content={help} /> : null}
+      </div>
+      <select
+        suppressHydrationWarning
+        aria-label={label}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className="touch-target w-full rounded-soft border border-pink-100 px-3"
+      >
+        <option value="">ไม่เชื่อม</option>
+        {options.map((option) => (
+          <option key={option.value} value={option.value}>{option.label}</option>
+        ))}
+      </select>
     </div>
   );
 }

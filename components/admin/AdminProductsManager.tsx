@@ -35,7 +35,7 @@ export function AdminProductsManager() {
       })
       .catch((error) => {
         setItems(localItems);
-        toast.error(error instanceof Error ? error.message : "โหลดสินค้าจาก Supabase ไม่สำเร็จ");
+        toast.error(error instanceof Error ? error.message : "โหลดสินค้าจากระบบไม่สำเร็จ");
       });
   }, []);
 

@@ -19,7 +19,7 @@ export async function PUT(request: Request) {
     return NextResponse.json(settings);
   } catch (error) {
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "บันทึก Meta Tags ไม่สำเร็จ" },
+      { error: error instanceof Error ? error.message : "บันทึกการตั้งค่าหน้าเว็บไม่สำเร็จ" },
       { status: 500 }
     );
   }

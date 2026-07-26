@@ -267,6 +267,7 @@ function CustomerCard({
       {expanded ? (
         <div className="mt-4 rounded-soft border border-pink-100 bg-blush/45 p-4">
           <div className="grid gap-3 text-sm sm:grid-cols-3">
+            <Detail label="รหัสลูกค้าในระบบ" value={customer.authUserId || customer.id} />
             <Detail label="เข้าสู่ระบบล่าสุด" value={formatDateTime(customer.lastSignInAt)} />
             <Detail label="ออเดอร์ล่าสุด" value={formatDateTime(customer.lastOrderAt)} />
             <Detail label="ยอดมัดจำรวม" value={`${customer.depositTotal.toLocaleString("th-TH")} บาท`} />

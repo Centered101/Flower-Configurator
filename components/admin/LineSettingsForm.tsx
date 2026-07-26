@@ -101,7 +101,7 @@ export function LineSettingsForm() {
             <h2 className="text-lg font-bold text-ink">แจ้งเตือนร้านผ่าน LINE</h2>
             <HelpTooltip
               title="LINE แจ้งเตือน"
-              content="ระบบส่งแจ้งเตือนหลักตอนลูกค้าอัปโหลดสลิป โดยรวมเลขออร์เดอร์ รายละเอียดสำคัญ และรูปสลิปไว้ใน Flex Message เดียวเพื่อลดโควต้า LINE"
+              content="ระบบส่งแจ้งเตือนหลักตอนลูกค้าอัปโหลดสลิป โดยรวมเลขออร์เดอร์ รายละเอียดสำคัญ และรูปสลิปไว้ในข้อความเดียวเพื่อลดจำนวนครั้งที่ส่ง LINE"
             />
           </div>
           <p className="mt-1 text-sm leading-6 text-zinc-600">
@@ -114,7 +114,7 @@ export function LineSettingsForm() {
         <div className="block">
           <div className="mb-1 flex items-center gap-2 text-sm font-semibold text-ink">
             รหัสเชื่อมต่อ LINE
-            <HelpTooltip content="ใช้ Channel access token จาก LINE Developers > Messaging API เท่านั้น โดยปกติเป็นรหัสยาว ๆ ใส่เฉพาะ token ไม่ต้องใส่คำว่า Bearer" />
+            <HelpTooltip content="ใช้รหัสเชื่อมต่อจาก LINE Developers หน้า Messaging API ใส่เฉพาะรหัสยาว ๆ ไม่ต้องใส่คำอื่นนำหน้า" />
           </div>
           <input
             suppressHydrationWarning
@@ -126,13 +126,13 @@ export function LineSettingsForm() {
             className="touch-target w-full rounded-soft border border-pink-100 px-3"
             autoComplete="off"
           />
-          <span className="mt-1 block text-xs text-zinc-500">ปล่อยว่างไว้ถ้าต้องการใช้รหัสเดิม ถ้าขึ้น 401 ให้สร้าง Channel access token ใหม่แล้วบันทึกทับ</span>
+          <span className="mt-1 block text-xs text-zinc-500">ปล่อยว่างไว้ถ้าต้องการใช้รหัสเดิม ถ้าทดสอบแล้วขึ้น 401 ให้สร้างรหัสเชื่อมต่อใหม่แล้วบันทึกทับ</span>
         </div>
 
         <div className="block">
           <div className="mb-1 flex items-center gap-2 text-sm font-semibold text-ink">
             รหัสผู้รับ LINE
-            <HelpTooltip content="ใส่ User ID ที่ขึ้นต้นด้วย U..., Group ID ที่ขึ้นต้นด้วย C... หรือ Room ID ที่ขึ้นต้นด้วย R... ผู้รับต้องเคยเพิ่มหรือคุยกับ LINE Bot แล้ว" />
+            <HelpTooltip content="ใส่รหัสผู้รับจาก LINE ถ้าเป็นกลุ่มต้องเป็นรหัสที่ขึ้นต้นด้วย C และบอทต้องอยู่ในกลุ่มนั้นแล้ว" />
           </div>
           <input
             suppressHydrationWarning

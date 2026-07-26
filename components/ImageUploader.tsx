@@ -6,7 +6,19 @@ import { toast } from "sonner";
 import { HelpTooltip } from "@/components/HelpTooltip";
 import type { ProcessedImage } from "@/lib/image-processing";
 
-export function ImageUploader({ bucket = "order-reference-images", folder = "order-references", onUploaded }: { bucket?: string; folder?: string; onUploaded?: (image: ProcessedImage) => void }) {
+export function ImageUploader({
+  bucket = "order-reference-images",
+  folder = "order-references",
+  title = "รูปตัวอย่าง",
+  help = "อัปโหลดไฟล์จากเครื่องหรือใส่ลิงก์รูปภาพได้ ระบบจะตรวจไฟล์ แปลงเป็นรูปที่เหมาะกับเว็บ และตั้งชื่อใหม่ก่อนบันทึก",
+  onUploaded
+}: {
+  bucket?: string;
+  folder?: string;
+  title?: string;
+  help?: string;
+  onUploaded?: (image: ProcessedImage) => void;
+}) {
   const [imageUrl, setImageUrl] = useState("");
   const [previewUrl, setPreviewUrl] = useState("");
   const [result, setResult] = useState<ProcessedImage | null>(null);
@@ -97,8 +109,8 @@ export function ImageUploader({ bucket = "order-reference-images", folder = "ord
     <fieldset disabled={isUploading} className="space-y-3 disabled:opacity-75">
       <div className="mb-3 flex items-center gap-2 font-bold text-ink">
         <ImagePlus className="text-blossom" size={20} />
-        รูปตัวอย่าง
-        <HelpTooltip content="อัปโหลดไฟล์จากเครื่องหรือใส่ URL รูปภาพ ระบบฝั่ง server จะตรวจชนิดไฟล์ แปลงเป็น webp/avif และตั้งชื่อไฟล์ใหม่ก่อนบันทึก" />
+        {title}
+        <HelpTooltip content={help} />
       </div>
 
       <label className="touch-target inline-flex w-full cursor-pointer items-center justify-center gap-2 rounded-soft bg-blossom px-4 py-2 font-bold text-white has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-60">
@@ -118,7 +130,7 @@ export function ImageUploader({ bucket = "order-reference-images", folder = "ord
         <div className="mb-2 flex items-center gap-2 text-sm font-bold text-ink">
           <LinkIcon size={17} className="text-blossom" />
           หรือใส่ลิงก์รูปภาพ
-          <HelpTooltip content="ใส่ลิงก์รูปภาพภายนอกได้ ระบบจะโหลดรูป ตรวจว่าเป็นรูปจริง และป้องกัน URL ภายในอย่าง localhost/private IP" />
+          <HelpTooltip content="ใส่ลิงก์รูปภาพจากเว็บอื่นได้ ระบบจะตรวจว่าเป็นรูปจริงและบล็อกลิงก์ที่ไม่ปลอดภัย" />
         </div>
         <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
           <input

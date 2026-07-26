@@ -5,6 +5,12 @@ import type { CustomerOrder } from "@/lib/types";
 
 export const runtime = "nodejs";
 
+type SupabaseAdmin = ReturnType<typeof createSupabaseAdminClient>;
+
+function isUuid(value?: string) {
+  return Boolean(value && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value));
+}
+
 function toDate(value: string) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
     throw new Error("วันที่รับสินค้าไม่ถูกต้อง");
@@ -28,6 +34,38 @@ function assertOrderPayload(order: CustomerOrder) {
   if (!order.authUserId) {
     throw new Error("กรุณาเข้าสู่ระบบก่อนสั่งซื้อ");
   }
+}
+
+async function resolveOrderItemLinks(supabase: SupabaseAdmin, order: CustomerOrder) {
+  let productId: string | null = null;
+  let flowerTypeId: string | null = null;
+
+  if (order.sourceItem?.sourceType === "product" && isUuid(order.sourceItem.id)) {
+    productId = order.sourceItem.id;
+  }
+
+  if (order.sourceItem?.sourceType === "gallery" && isUuid(order.sourceItem.id)) {
+    const { data } = await supabase
+      .from("gallery_items")
+      .select("product_id, flower_type_id")
+      .eq("id", order.sourceItem.id)
+      .maybeSingle();
+
+    productId = typeof data?.product_id === "string" ? data.product_id : productId;
+    flowerTypeId = typeof data?.flower_type_id === "string" ? data.flower_type_id : flowerTypeId;
+  }
+
+  if (!flowerTypeId && order.config.flowerType) {
+    const { data } = await supabase
+      .from("flower_types")
+      .select("id")
+      .eq("slug", order.config.flowerType)
+      .maybeSingle();
+
+    flowerTypeId = typeof data?.id === "string" ? data.id : null;
+  }
+
+  return { productId, flowerTypeId };
 }
 
 export async function POST(request: Request) {
@@ -82,14 +120,18 @@ export async function POST(request: Request) {
     await supabase.from("order_items").delete().eq("order_id", order.id);
 
     const quantity = Math.max(1, Number(order.config.quantity || 1));
+    const itemLinks = await resolveOrderItemLinks(supabase, order);
     const { error: itemError } = await supabase.from("order_items").insert({
       order_id: order.id,
+      product_id: itemLinks.productId,
+      flower_type_id: itemLinks.flowerTypeId,
       quantity,
       unit_price: Number((order.total / quantity).toFixed(2)),
       line_total: order.total,
       customization_json: {
         config: order.config,
-        sourceItem: order.sourceItem ?? null
+        sourceItem: order.sourceItem ?? null,
+        links: itemLinks
       }
     });
 

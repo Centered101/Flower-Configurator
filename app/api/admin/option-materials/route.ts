@@ -107,7 +107,7 @@ export async function PUT(request: Request) {
 
   if (cleanup.error) {
     if (isMissingOptionalSchema(cleanup.error)) {
-      return NextResponse.json({ error: "ฐานข้อมูลยังไม่มีตาราง design_option_materials กรุณารัน supabase/schema.sql ก่อนผูกวัสดุกับตัวเลือก" }, { status: 400 });
+      return NextResponse.json({ error: "ยังใช้ระบบเชื่อมวัสดุไม่ได้ กรุณาอัปเดตโครงสร้างฐานข้อมูลก่อน" }, { status: 400 });
     }
 
     return NextResponse.json({ error: cleanup.error.message }, { status: 500 });
@@ -124,7 +124,7 @@ export async function PUT(request: Request) {
 
   if (error) {
     if (isMissingOptionalSchema(error)) {
-      return NextResponse.json({ error: "ฐานข้อมูลยังไม่มีตาราง design_option_materials กรุณารัน supabase/schema.sql ก่อนผูกวัสดุกับตัวเลือก" }, { status: 400 });
+      return NextResponse.json({ error: "ยังใช้ระบบเชื่อมวัสดุไม่ได้ กรุณาอัปเดตโครงสร้างฐานข้อมูลก่อน" }, { status: 400 });
     }
 
     return NextResponse.json({ error: error.message }, { status: 500 });

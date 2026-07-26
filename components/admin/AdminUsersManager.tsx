@@ -15,9 +15,9 @@ type AdminUser = {
 type AdminRole = AdminUser["role"];
 
 const roleOptions = [
-  { value: "admin", label: "Admin" },
-  { value: "superadmin", label: "Superadmin" },
-  { value: "owner", label: "Owner" }
+  { value: "admin", label: "ผู้ดูแล" },
+  { value: "superadmin", label: "หัวหน้าผู้ดูแล" },
+  { value: "owner", label: "เจ้าของร้าน" }
 ] as const;
 
 export function AdminUsersManager() {
@@ -72,7 +72,7 @@ export function AdminUsersManager() {
 
   function addUser() {
     if (!canManageAdmins) {
-      toast.error("เฉพาะ Owner หรือ Superadmin เท่านั้นที่เพิ่มผู้ดูแลได้");
+      toast.error("เฉพาะเจ้าของร้านหรือหัวหน้าผู้ดูแลเท่านั้นที่เพิ่มผู้ดูแลได้");
       return;
     }
 
@@ -106,7 +106,7 @@ export function AdminUsersManager() {
     }
 
     if (user.role === "owner" && !canSetOwner) {
-      toast.error("เฉพาะ Owner เท่านั้นที่ตั้งสิทธิ์ Owner ได้");
+      toast.error("เฉพาะเจ้าของร้านเท่านั้นที่ตั้งสิทธิ์เจ้าของร้านได้");
       return;
     }
 
@@ -149,7 +149,7 @@ export function AdminUsersManager() {
     if (isSaving || deletingId) return;
 
     if (!canManageAdmins) {
-      toast.error("เฉพาะ Owner หรือ Superadmin เท่านั้นที่ลบผู้ดูแลได้");
+      toast.error("เฉพาะเจ้าของร้านหรือหัวหน้าผู้ดูแลเท่านั้นที่ลบผู้ดูแลได้");
       return;
     }
 
@@ -159,7 +159,7 @@ export function AdminUsersManager() {
     }
 
     if (user.role === "owner" && !canSetOwner) {
-      toast.error("เฉพาะ Owner เท่านั้นที่ลบบัญชี Owner ได้");
+      toast.error("เฉพาะเจ้าของร้านเท่านั้นที่ลบบัญชีเจ้าของร้านได้");
       return;
     }
 
@@ -198,9 +198,9 @@ export function AdminUsersManager() {
             <h2 className="text-lg font-bold text-ink">บัญชีผู้ดูแลร้าน</h2>
             <p className="mt-1 text-sm text-zinc-600">เพิ่ม แก้ไขชื่อ และตั้งรหัสผ่านผู้ดูแลร้าน</p>
             {currentRole === "admin" ? (
-              <p className="mt-1 text-xs font-semibold text-blossom">บัญชี Admin ดูรายชื่อได้ แต่การเพิ่มและแก้ไขผู้ดูแลต้องใช้ Owner หรือ Superadmin</p>
+              <p className="mt-1 text-xs font-semibold text-blossom">บัญชีผู้ดูแลดูรายชื่อได้ แต่การเพิ่มและแก้ไขผู้ดูแลต้องใช้เจ้าของร้านหรือหัวหน้าผู้ดูแล</p>
             ) : !canSetOwner ? (
-              <p className="mt-1 text-xs font-semibold text-blossom">บัญชีนี้จัดการ Admin/Superadmin ได้ แต่การตั้ง Owner ต้องใช้บัญชี Owner</p>
+              <p className="mt-1 text-xs font-semibold text-blossom">บัญชีนี้จัดการผู้ดูแลและหัวหน้าผู้ดูแลได้ แต่การตั้งเจ้าของร้านต้องใช้บัญชีเจ้าของร้าน</p>
             ) : null}
           </div>
           <button type="button" onClick={addUser} disabled={!canManageAdmins} className="touch-target inline-flex items-center gap-2 rounded-soft bg-blossom px-3 py-2 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-60">

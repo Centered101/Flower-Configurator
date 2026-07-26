@@ -1,5 +1,12 @@
 -- Storage buckets และ policies สำหรับไฟล์รูปภาพ
 -- ใช้ไฟล์นี้แยกจาก schema ตารางหลัก เพื่อจัดการ storage ได้ชัดเจน
+--
+-- gallery-images เป็น public เพราะใช้กับรูปที่คนภายนอกต้องเห็นได้ เช่น
+-- สินค้า ผลงาน รูปประเภทสินค้า และรูปเวลาแชร์ลิงก์ใน admin/settings
+-- รูปแชร์ลิงก์จะเก็บไว้ใต้ path: seo/
+--
+-- order-reference-images, order-progress-images และ payment-slips เป็น private
+-- เพราะเกี่ยวกับคำสั่งซื้อ ลูกค้า หรือหลักฐานการชำระเงิน
 
 insert into storage.buckets (
   id,

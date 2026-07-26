@@ -85,7 +85,7 @@ const adminPageHelps: Record<string, PageHelp> = {
   },
   "/admin/members": {
     title: "ผู้ดูแลร้าน",
-    content: "จัดการบัญชีผู้ดูแลร้าน แก้ไขข้อมูลตัวเอง และกำหนดสิทธิ์ตาม role"
+    content: "จัดการบัญชีผู้ดูแลร้าน แก้ไขข้อมูลตัวเอง และกำหนดสิทธิ์ของแต่ละคน"
   },
   "/admin/settings": {
     title: "ตั้งค่า",
@@ -93,7 +93,7 @@ const adminPageHelps: Record<string, PageHelp> = {
   },
   "/admin/login": {
     title: "เข้าสู่ระบบผู้ดูแล",
-    content: "ใช้ username และ password ของผู้ดูแลร้าน ไม่ใช่บัญชีลูกค้า Supabase"
+    content: "ใช้ชื่อผู้ใช้และรหัสผ่านของผู้ดูแลร้าน ไม่ใช่บัญชีลูกค้า"
   }
 };
 

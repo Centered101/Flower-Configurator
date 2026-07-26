@@ -102,7 +102,7 @@ function assertPathOrHttpUrl(value: string, label: string) {
 
 function assertHexColor(value: string) {
   if (!/^#[0-9a-f]{6}$/i.test(value)) {
-    throw new Error("Theme color ต้องเป็นรหัสสีแบบ #RRGGBB");
+    throw new Error("สีแถบบราวเซอร์ต้องเป็นรหัสสีแบบ #RRGGBB");
   }
 }
 
@@ -185,10 +185,10 @@ export async function saveSeoSettings(input: Partial<SeoSettings>) {
   if (!next.twitterDescription) next.twitterDescription = next.ogDescription;
   if (!next.twitterImageUrl) next.twitterImageUrl = next.ogImageUrl;
 
-  assertHttpUrl(next.siteUrl, "Site URL");
-  assertPathOrHttpUrl(next.canonicalPath, "Canonical URL");
-  assertPathOrHttpUrl(next.ogImageUrl, "Open Graph image");
-  assertPathOrHttpUrl(next.twitterImageUrl, "Twitter image");
+  assertHttpUrl(next.siteUrl, "ลิงก์เว็บไซต์");
+  assertPathOrHttpUrl(next.canonicalPath, "ลิงก์หลักของหน้า");
+  assertPathOrHttpUrl(next.ogImageUrl, "รูปเวลาแชร์ลิงก์");
+  assertPathOrHttpUrl(next.twitterImageUrl, "รูปเวลาแชร์ใน X");
   assertHexColor(next.themeColor);
 
   const supabase = createSupabaseAdminClient();

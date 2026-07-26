@@ -6,6 +6,8 @@ import type { AdminGalleryItem } from "@/lib/admin-data";
 type GalleryRow = {
   id: string;
   title: string;
+  product_id?: string | null;
+  flower_type_id?: string | null;
   image_url: string | null;
   image_path?: string | null;
   image_width?: number | null;
@@ -28,6 +30,8 @@ function mapGalleryItem(row: GalleryRow): AdminGalleryItem {
   return {
     id: row.id,
     title: row.title,
+    productId: row.product_id ?? undefined,
+    flowerTypeId: row.flower_type_id ?? undefined,
     flower: row.flower ?? (typeof metadata.flower === "string" ? metadata.flower : ""),
     color: row.color ?? row.color_slug ?? (typeof metadata.color === "string" ? metadata.color : ""),
     size: row.bouquet_size ?? (typeof metadata.size === "string" ? metadata.size : ""),
@@ -58,6 +62,8 @@ function createGalleryRow(payload: Partial<AdminGalleryItem>) {
   return {
     id,
     title: payload.title?.trim() ?? "",
+    product_id: isUuid(payload.productId) ? payload.productId : null,
+    flower_type_id: isUuid(payload.flowerTypeId) ? payload.flowerTypeId : null,
     image_url: payload.image?.url ?? null,
     image_path: payload.image?.path ?? null,
     image_width: payload.image?.width ?? null,
@@ -72,6 +78,8 @@ function createGalleryRow(payload: Partial<AdminGalleryItem>) {
     production_score: productionScore,
     configuration_json: {
       flower,
+      productId: payload.productId,
+      flowerTypeId: payload.flowerTypeId,
       color,
       size,
       productionScore,
@@ -101,7 +109,7 @@ export async function GET() {
 
   const { data, error } = await supabase
     .from("gallery_items")
-    .select("id, title, image_url, image_path, image_width, image_height, image_format, image_size, flower, color, color_slug, bouquet_size, price, production_score, configuration_json")
+    .select("id, title, product_id, flower_type_id, image_url, image_path, image_width, image_height, image_format, image_size, flower, color, color_slug, bouquet_size, price, production_score, configuration_json")
     .eq("is_public", true)
     .order("created_at", { ascending: false });
 
@@ -125,7 +133,7 @@ export async function POST(request: Request) {
   const { data, error } = await supabase
     .from("gallery_items")
     .upsert(row, { onConflict: "id" })
-    .select("id, title, image_url, image_path, image_width, image_height, image_format, image_size, flower, color, color_slug, bouquet_size, price, production_score, configuration_json")
+    .select("id, title, product_id, flower_type_id, image_url, image_path, image_width, image_height, image_format, image_size, flower, color, color_slug, bouquet_size, price, production_score, configuration_json")
     .single();
 
   if (error) {
